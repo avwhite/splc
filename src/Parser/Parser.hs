@@ -2,15 +2,12 @@ module Parser.Parser where
 
 import Scanner
 import Parser.Combinators
+import Parser.AST
 
 import Control.Applicative
 
---Very simple test
-type Identifier = String
-data ASTType = BoolT | IntT | CharT | PairT ASTType ASTType | ListT ASTType
-    | PolyT Identifier deriving Show
-data ASTReturnType = Void | ReturnType ASTType deriving Show
-data ASTFunType = FunType [ASTType] ASTReturnType deriving Show
+parseSpl :: String -> ASTFunType
+parseSpl s = (fst . head) (runParser funTypep (alexScanTokens s))
 
 typep :: Parser Token ASTType
 typep =
