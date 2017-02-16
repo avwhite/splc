@@ -1,14 +1,14 @@
 name:                splc
 version:             0.1.0.0
-synopsis:            Initial project template from stack
+synopsis:            Compiler for the sexy programming language
 description:         Please see README.md
-homepage:            https://github.com/githubuser/splc#readme
-license:             BSD3
+homepage:            https://github.com/avwhite/splc/
+license:             AllRightsReserved
 license-file:        LICENSE
-author:              Author name here
-maintainer:          example@example.com
-copyright:           2017 Author name here
-category:            Web
+author:              Ronan Guillaume, Marius Olariu, Andreas Vinter-Hviid
+maintainer:          a.vinterhviid@student.ru.nl
+copyright:           2017 Ronan Guillaume, Marius Olariu, Andreas Vinter-Hviid
+category:            Compiler
 build-type:          Simple
 extra-source-files:  README.md src/Scanner.x
 cabal-version:       >=1.10
@@ -39,4 +39,4 @@ test-suite splc-test
 
 source-repository head
   type:     git
-  location: https://github.com/githubuser/splc
+  location: https://github.com/avwhite/splc
