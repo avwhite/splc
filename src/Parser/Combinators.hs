@@ -38,7 +38,7 @@ infixl 3 <<|>
 --Eager version of many. Only parses the longest possible list. Maby will be
 --usefull for unterminated lists?
 eagerMany :: Parser t a -> Parser t [a]
-eagerMany p = (:) <$> p <*> (eagerMany p <<|> pure [])
+eagerMany p = ((:) <$> p <*> eagerMany p) <<|> (pure [])
 
 --Eager version of some. Only parses the longest possible list. Maby will be
 --usefull for unterminated lists?
