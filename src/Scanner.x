@@ -102,4 +102,7 @@ data Token =
     | IntLitTok Int
     | IdTok String
     deriving (Data, Show)
+
+instance Eq Token where
+    (==) t1 t2 = toConstr t1 == toConstr t2
 }

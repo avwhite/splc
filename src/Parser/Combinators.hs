@@ -49,5 +49,5 @@ eat :: Token -> Parser Token Token
 eat match = Parser eat' where
     eat' [] = []
     eat' (t:ts)
-        | toConstr t == toConstr match = [(t,ts)]
+        | t == match = [(t,ts)]
         | otherwise = []
