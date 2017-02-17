@@ -16,7 +16,7 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     Lib, Scanner, Parser.Parser, Parser.Combinators, Parser.AST, Parser.Output
-  build-depends:       base >= 4.7 && < 5, array, containers, diagrams, diagrams-contrib, diagrams-lib, diagrams-svg
+  build-depends:       base >= 4.7 && < 5, array, containers
   default-language:    Haskell2010
   build-tools:         alex
 
@@ -24,7 +24,7 @@ executable splc-exe
   hs-source-dirs:      app
   main-is:             Main.hs
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  build-depends:       base, diagrams-lib, diagrams-svg
+  build-depends:       base
                      , splc
   default-language:    Haskell2010
 
