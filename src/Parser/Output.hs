@@ -1,4 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
 module Parser.Output where
 
@@ -43,9 +42,12 @@ ext1Q def ext = unQ ((Q def) `ext1` (Q ext))
 data2tree :: Data a => a -> Tree String
 data2tree = (gdefault `ext1Q` atList) `extQ` atString
   where
-    atString (x::String) = Node x []
+    atString :: String -> Tree String
+    atString x = Node x []
+
     atList :: Data e => [e] -> Tree String
     atList x = Node "List:" (fmap data2tree x)
+
     gdefault x = Node (showConstr (toConstr x)) (gmapQ data2tree x)
 
 drawAst :: Data t => t -> IO ()
