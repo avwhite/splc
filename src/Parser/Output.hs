@@ -4,6 +4,7 @@ module Parser.Output where
 import Data.Data
 --import Data.Generics.Aliases
 import Data.Tree
+import Parser.AST
 
 --THE FOLLWING DEFINITIONS (Q, ext1, extQ, ext1Q) ARE COPIED ALMOST VERBITAM
 --FROM THE syb PACKAGE (not included in stackage). THESE WOULD NORMALLY BE 
@@ -40,13 +41,18 @@ ext1Q def ext = unQ ((Q def) `ext1` (Q ext))
 
 --Black generic programming magic happening here. 
 data2tree :: Data a => a -> Tree String
-data2tree = (gdefault `ext1Q` atList) `extQ` atString
+data2tree = (gdefault `ext1Q` atList) `extQ` atString `extQ` atAstExp
   where
     atString :: String -> Tree String
     atString x = Node x []
 
     atList :: Data e => [e] -> Tree String
     atList x = Node "List:" (fmap data2tree x)
+
+    atAstExp :: ASTExp -> Tree String
+    atAstExp (Op2E o e1 e2) = 
+        Node (showConstr (toConstr o)) [data2tree e1, data2tree e2]
+    atAstExp x = gdefault x
 
     gdefault x = Node (showConstr (toConstr x)) (gmapQ data2tree x)
 
