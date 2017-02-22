@@ -10,4 +10,4 @@ import System.Environment
 main :: IO ()
 main = do
     input <- getLine
-    drawAst (parseSpl input)
+    drawAst (parse funTypep input)

@@ -21,7 +21,7 @@ data Op2 =
       Plus | Minus | Times | Div | Mod
     | Equal | Less | Greater | LessEq | GreaterEq | NotEq
     | And | Or
-    | Cons
+    | Cons deriving (Data, Show)
 --TODO: Add Fields, Op1, FunCall
 data ASTExp =
       Var Identifier
@@ -31,4 +31,4 @@ data ASTExp =
     | BoolE Bool
     | NilE
     | PairE ASTExp ASTExp
-    | ParanE ASTExp
+    | ParanE ASTExp deriving (Data, Show)
