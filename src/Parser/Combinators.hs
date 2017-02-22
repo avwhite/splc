@@ -45,9 +45,14 @@ eagerMany p = ((:) <$> p <*> eagerMany p) <<|> (pure [])
 eagerSome :: Parser t a -> Parser t [a]
 eagerSome p = (:) <$> p <*> eagerMany p
 
-eat :: Token -> Parser Token Token
+eat :: (Eq a) => a -> Parser a a
 eat match = Parser eat' where
     eat' [] = []
     eat' (t:ts)
         | t == match = [(t,ts)]
         | otherwise = []
+
+eof :: Parser a ()
+eof = Parser eof' where
+    eof' [] = [((), [])]
+    eof' t = []
