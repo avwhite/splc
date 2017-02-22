@@ -52,6 +52,7 @@ data2tree = (gdefault `ext1Q` atList) `extQ` atString `extQ` atAstExp
     atAstExp :: ASTExp -> Tree String
     atAstExp (Op2E o e1 e2) = 
         Node (showConstr (toConstr o)) [data2tree e1, data2tree e2]
+    atAstExp (IntE i) = Node (show i) []
     atAstExp x = gdefault x
 
     gdefault x = Node (showConstr (toConstr x)) (gmapQ data2tree x)
