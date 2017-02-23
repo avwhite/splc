@@ -6,9 +6,6 @@ import Parser.AST
 
 import Control.Applicative
 
-tok :: (Eq a) => a -> b -> Parser a b
-tok a b = (eat a *> pure b)
-
 parse :: (Parser Token a) -> String -> a
 parse p s = (fst . head) (runParser (p <* eof) (alexScanTokens s))
 

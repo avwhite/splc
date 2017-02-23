@@ -5,6 +5,7 @@ import Control.Monad
 import Control.Applicative
 import Data.Data
 import Data.List
+import Data.Maybe
 
 data Parser t a = Parser ([t] -> [(a, [t])])
 
@@ -29,6 +30,10 @@ instance Alternative (Parser t) where
     empty = Parser (\ts -> [])
     (<|>) p1 p2 = Parser (\ts -> runParser p1 ts ++ runParser p2 ts)
 
+manySep :: (Alternative f) => f a -> f b -> f [b]
+manySep sep x = (\mx xs -> maybeToList mx ++ xs) <$>
+    optional x <*> many (sep *> x)
+
 --Eager version of alternative. Dosen't consider p2 of p1 is a success.
 infixl 3 <<|>
 (<<|>) :: Parser t s -> Parser t s -> Parser t s
@@ -51,6 +56,9 @@ eat match = Parser eat' where
     eat' (t:ts)
         | t == match = [(t,ts)]
         | otherwise = []
+
+tok :: (Eq a) => a -> b -> Parser a b
+tok a b = (eat a *> pure b)
 
 eof :: Parser a ()
 eof = Parser eof' where
