@@ -17,18 +17,23 @@ data ASTReturnType =
     | ReturnType ASTType deriving (Data, Show)
 data ASTFunType = FunType [ASTType] ASTReturnType deriving (Data, Show)
 
+data Op1 = Neg | Not deriving (Data, Show)
+
 data Op2 =
       Plus | Minus | Times | Div | Mod
     | Equal | Less | Greater | LessEq | GreaterEq | NotEq
     | And | Or
     | Cons deriving (Data, Show)
---TODO: Add Fields, Op1, FunCall
+
+data Field = Hd | Tl | Fst | Snd deriving (Data, Show)
+
 data ASTExp =
-      Var Identifier
+      Var Identifier [Field]
     | Op2E Op2 ASTExp ASTExp
+    | Op1E Op1 ASTExp
+    | FunCallE Identifier [ASTExp]
     | IntE Int
     | CharE Char
     | BoolE Bool
     | NilE
-    | PairE ASTExp ASTExp
-    | ParanE ASTExp deriving (Data, Show)
+    | PairE ASTExp ASTExp deriving (Data, Show)

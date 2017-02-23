@@ -27,6 +27,9 @@ returnTypep = (eat VoidTok *> pure Void)  <|> (ReturnType <$> typep)
 funTypep :: Parser Token ASTFunType
 funTypep = FunType <$> (many typep <* eat ArrowTok) <*> returnTypep
 
+op1p :: Parser Token Op1
+op1p = (tok MinusTok Neg) <|> (tok NotTok Not)
+
 type Precedence = Int
 
 op2p :: Precedence -> Parser Token Op2
@@ -46,7 +49,14 @@ op2p 4 =
 
 highestPrecedence = 4 :: Int
 
---TODO: Most forms of expressions
+fieldp :: Parser Token Field
+fieldp = eat DotTok *> fieldName where
+    fieldName =
+            (tok HdTok Hd)
+        <|> (tok TlTok Tl)
+        <|> (tok FstTok Fst)
+        <|> (tok SndTok Snd)
+
 --TODO: Associativity. For now operators on the same precedence level always
 --      associate to the right
 expp :: Precedence -> Parser Token ASTExp
@@ -61,8 +71,19 @@ expp pr = combine <$> expp' pr <*> expp'' pr where
         | otherwise =
                 (tok FalseTok (BoolE False))
             <|> (tok TrueTok (BoolE True))
+            <|> (tok EmptyListTok NilE)
+            <|> ((\(IdTok i) -> Var i) <$> eat (IdTok "") <*> many fieldp)
+            <|> ((\(IdTok i) -> FunCallE i) <$> 
+                    eat (IdTok "")
+                <*> (eat LParTok *> 
+                    manySep (eat CommaTok) (expp 0)
+                    <* eat RParTok))
+            <|> (Op1E <$> op1p <*> expp' pr) -- unary ops binds tightest
             <|> ((\(IntLitTok i) -> IntE i) <$> eat (IntLitTok 0))
             <|> (eat LParTok *> expp 0 <* eat RParTok)
+            <|> (PairE <$>
+                    (eat LParTok *> (expp 0 <* eat CommaTok)) 
+                <*> (expp 0 <* eat RParTok))
 
     expp'' :: Precedence -> Parser Token (Maybe (Op2, ASTExp))
     expp'' pr = optional ((,) <$> op2p pr <*> expp pr)
