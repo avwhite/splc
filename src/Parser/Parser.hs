@@ -5,6 +5,7 @@ import Parser.Combinators
 import Parser.AST
 
 import Control.Applicative
+import Control.Applicative.Alternative
 
 parse :: (Parser Token a) -> String -> a
 parse p s = (fst . head) (runParser (p <* eof) (alexScanTokens s))
@@ -30,24 +31,14 @@ funTypep = FunType <$> (many typep <* eat ArrowTok) <*> returnTypep
 op1p :: Parser Token Op1
 op1p = (tok MinusTok Neg) <|> (tok NotTok Not)
 
-type Precedence = Int
-
 op2p :: Precedence -> Parser Token Op2
-op2p 0 =  (tok EqTok Equal) <|> (tok NeTok NotEq)
-op2p 1 =
-        (tok LtTok Less)
-    <|> (tok LeTok LessEq)
-    <|> (tok GtTok Greater)
-    <|> (tok GeTok GreaterEq)
-op2p 2 = (tok ColonTok Cons)
-op2p 3 = (tok PlusTok Plus)  <|> (tok MinusTok Minus) <|> (tok OrTok Or)
-op2p 4 =
-        (tok TimesTok Times)
-    <|> (tok DivTok Div)
-    <|> (tok ModTok Mod)
-    <|> (tok AndTok And)
-
-highestPrecedence = 4 :: Int
+op2p pr = asum [(tok t p) | (t,p) <- op2TokenAst, precedence p == pr] where
+    op2TokenAst =
+        [(EqTok, Equal), (NeTok, NotEq), (LtTok, Less)
+        ,(LeTok, LessEq), (GtTok, Greater), (GeTok, GreaterEq)
+        ,(ColonTok, Cons), (PlusTok, Plus), (MinusTok, Minus)
+        ,(OrTok, Or), (TimesTok, Times), (DivTok, Div)
+        ,(ModTok, Mod), (AndTok, And)]
 
 fieldp :: Parser Token Field
 fieldp = eat DotTok *> fieldName where
