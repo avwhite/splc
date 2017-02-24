@@ -105,3 +105,23 @@ stmtp = ifp <|> whilep <|> assignp <|> funcallp <|> returnp where
         <*> (prnth (manySep (eat CommaTok) (expp 0)) <* eat SemiColonTok)
     returnp = ReturnS
         <$> (eat ReturnTok *> optional (expp 0) <* eat SemiColonTok)
+
+varDeclp :: Parser Token ASTVarDecl
+varDeclp = VarDecl
+    <$> ((eat VarTok *> pure Nothing) <|> Just <$> typep)
+    <*> (identName <$> eat (IdTok ""))
+    <*> (eat AssignTok *> expp 0 <* eat SemiColonTok)
+
+funDeclp :: Parser Token ASTFunDecl
+funDeclp = FunDecl
+    <$> (identName <$> eat (IdTok ""))
+    <*> prnth (manySep (eat CommaTok) (identName <$> eat (IdTok "")))
+    <*> optional (eat OfTypeTok *> funTypep)
+    <*> (eat LBracketTok *> many varDeclp)
+    <*> (some stmtp <* eat RBracketTok)
+
+declp :: Parser Token ASTDecl
+declp = (VarD <$> varDeclp) <|> (FunD <$> funDeclp)
+
+splp :: Parser Token AST
+splp = some declp

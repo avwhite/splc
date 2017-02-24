@@ -69,3 +69,13 @@ data ASTStmt =
     | AssignS Identifier ASTExp
     | FunCallS Identifier [ASTExp]
     | ReturnS (Maybe ASTExp) deriving (Data, Show)
+
+data ASTVarDecl = VarDecl (Maybe ASTType) Identifier ASTExp
+    deriving (Data, Show)
+data ASTFunDecl =
+    FunDecl Identifier [Identifier] (Maybe ASTFunType) [ASTVarDecl] [ASTStmt]
+    deriving (Data, Show)
+
+data ASTDecl = FunD ASTFunDecl | VarD ASTVarDecl deriving (Data, Show)
+
+type AST = [ASTDecl]
