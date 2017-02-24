@@ -8,6 +8,7 @@ import Data.Data
 
 tokens :-
     $white+ ;
+    "//".* ;
     var {\s -> VarTok}
     \= {\s -> AssignTok}
     \; {\s -> SemiColonTok}
@@ -52,7 +53,7 @@ tokens :-
     : {\s -> ColonTok}
     ! {\s -> NotTok}
     [0-9]+ {IntLitTok . read}
-    [a-z][_a-z0-9]* {IdTok}
+    [a-zA-Z][_a-z0-9A-Z]* {IdTok}
 
 {
 data Token =
