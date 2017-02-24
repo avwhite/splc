@@ -30,9 +30,11 @@ instance Alternative (Parser t) where
     empty = Parser (\ts -> [])
     (<|>) p1 p2 = Parser (\ts -> runParser p1 ts ++ runParser p2 ts)
 
+someSep :: (Alternative f) => f a -> f b -> f [b]
+someSep sep x = (:) <$> x <*> many (sep *> x)
+
 manySep :: (Alternative f) => f a -> f b -> f [b]
-manySep sep x = (\mx xs -> maybeToList mx ++ xs) <$>
-    optional x <*> many (sep *> x)
+manySep sep x = someSep sep x <|> pure []
 
 --Eager version of alternative. Dosen't consider p2 of p1 is a success.
 infixl 3 <<|>
