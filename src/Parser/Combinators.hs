@@ -36,6 +36,12 @@ someSep sep x = (:) <$> x <*> many (sep *> x)
 manySep :: (Alternative f) => f a -> f b -> f [b]
 manySep sep x = someSep sep x <|> pure []
 
+someSep' :: (Alternative f) => f a -> f b -> f (b,[(a,b)])
+someSep' sep x = (,) <$> x <*> many ((,) <$> sep <*> x)
+
+--manySep' not included because it is not needed for now, and the return type
+--would end up being something horrendous like (Maybe (f (a,[(b,a)])))
+
 --Eager version of alternative. Dosen't consider p2 of p1 is a success.
 infixl 3 <<|>
 (<<|>) :: Parser t s -> Parser t s -> Parser t s
