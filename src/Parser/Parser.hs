@@ -10,6 +10,12 @@ import Control.Applicative.Alternative
 parse :: (Parser Token a) -> String -> a
 parse p s = (fst . head) (runParser (p <* eof) (alexScanTokens s))
 
+prnth p = eat LParTok *> p <* eat RParTok
+brckt p = eat LBracketTok *> p <* eat RBracketTok
+sqbrk p = eat LSqBracketTok *> p <* eat RSqBracketTok
+
+identName (IdTok i) = i
+
 typep :: Parser Token ASTType
 typep =
         (eat BoolTok *> pure BoolT)
@@ -81,3 +87,21 @@ expp pr = makeExpAst (assoc pr) <$> someSep' (op2p pr) (expp' pr) where
             <|> (PairE <$>
                     (eat LParTok *> (expp 0 <* eat CommaTok)) 
                 <*> (expp 0 <* eat RParTok))
+
+stmtp :: Parser Token ASTStmt
+stmtp = ifp <|> whilep <|> assignp <|> funcallp <|> returnp where
+    ifp = IfS
+        <$> ((eat IfTok) *> prnth (expp 0))
+        <*> brckt (many stmtp)
+        <*> optional (eat ElseTok *> brckt (many stmtp))
+    whilep = WhileS
+        <$> (eat WhileTok *> prnth (expp 0))
+        <*> brckt (many stmtp)
+    assignp = AssignS . identName 
+        <$> (eat (IdTok ""))
+        <*> (eat AssignTok *> expp 0 <* eat SemiColonTok) 
+    funcallp = FunCallS . identName
+        <$> eat (IdTok "")
+        <*> (prnth (manySep (eat CommaTok) (expp 0)) <* eat SemiColonTok)
+    returnp = ReturnS
+        <$> (eat ReturnTok *> optional (expp 0) <* eat SemiColonTok)

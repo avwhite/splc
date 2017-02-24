@@ -62,3 +62,10 @@ data ASTExp =
     | BoolE Bool
     | NilE
     | PairE ASTExp ASTExp deriving (Data, Show)
+
+data ASTStmt =
+      IfS ASTExp [ASTStmt] (Maybe [ASTStmt])
+    | WhileS ASTExp [ASTStmt]
+    | AssignS Identifier ASTExp
+    | FunCallS Identifier [ASTExp]
+    | ReturnS (Maybe ASTExp) deriving (Data, Show)
