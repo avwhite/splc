@@ -51,7 +51,7 @@ tokens :-
     \|\| {\s -> OrTok}
     : {\s -> ColonTok}
     ! {\s -> NotTok}
-    \-?[0-9]+ {IntLitTok . read}
+    [0-9]+ {IntLitTok . read}
     [a-z][_a-z0-9]* {IdTok}
 
 {
