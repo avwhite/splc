@@ -48,12 +48,18 @@ fieldp = eat DotTok *> fieldName where
         <|> (tok FstTok Fst)
         <|> (tok SndTok Snd)
 
---TODO: Associativity. For now operators on the same precedence level always
---      associate to the right
 expp :: Precedence -> Parser Token ASTExp
-expp pr = combine <$> expp' pr <*> expp'' pr where
-    combine e1 Nothing = e1
-    combine e1 (Just (o, e2)) = Op2E o e1 e2
+expp pr = makeExpAst (assoc pr) <$> someSep' (op2p pr) (expp' pr) where
+
+    rightifyExpList :: (b,[(a,b)]) -> ([(b,a)],b)
+    rightifyExpList (b,[]) = ([], b)
+    rightifyExpList (b,(a,c):t) =
+        (\(l,e) -> ((b,a):l, e)) (rightifyExpList (c,t))
+
+    makeExpAst :: Associativity -> (ASTExp, [(Op2, ASTExp)]) -> ASTExp
+    makeExpAst LeftAssoc (x,xs) = foldl (\e1 (o, e2) -> Op2E o e1 e2) x xs
+    makeExpAst RightAssoc l = makeExpAst' (rightifyExpList l) where
+        makeExpAst' (xs,x) = foldr (\(e1, o) e2 -> Op2E o e1 e2) x xs
 
     --TODO: What about Char?
     expp' :: Precedence -> Parser Token ASTExp
@@ -75,6 +81,3 @@ expp pr = combine <$> expp' pr <*> expp'' pr where
             <|> (PairE <$>
                     (eat LParTok *> (expp 0 <* eat CommaTok)) 
                 <*> (expp 0 <* eat RParTok))
-
-    expp'' :: Precedence -> Parser Token (Maybe (Op2, ASTExp))
-    expp'' pr = optional ((,) <$> op2p pr <*> expp pr)
