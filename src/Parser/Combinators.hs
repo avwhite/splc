@@ -3,32 +3,43 @@ module Parser.Combinators where
 import Scanner
 import Control.Monad
 import Control.Applicative
-import Data.Data
-import Data.List
-import Data.Maybe
+import Data.Semigroup
+import Data.List.NonEmpty
 
-data Parser t a = Parser ([t] -> [(a, [t])])
+type ParseResult t e a = Either e (NonEmpty (a, [t]))
+data Parser t e a = Parser ([t] -> ParseResult t e a)
 
-runParser :: Parser t a -> [t] -> [(a,[t])]
+runParser :: Parser t e a -> [t] -> ParseResult t e a
 runParser (Parser p) = p
 
-instance Functor (Parser t) where
+combineParses :: 
+    (Semigroup e) => 
+    ParseResult t e a -> 
+    ParseResult t e a -> 
+    ParseResult t e a
+combineParses (Left _) (Right l) = Right l
+combineParses (Right l) (Left _) = Right l
+combineParses (Left m1) (Left m2) = Left (m1 <> m2)
+combineParses (Right l1) (Right l2) = Right (l1 <> l2)
+
+--technically I think we could provide a functor instance which does not
+--require the Semigroup constraint on e, but this is easier.
+instance (Semigroup e) => Functor (Parser t e) where
     fmap = liftM
 
-instance Applicative (Parser t) where
-    pure a = Parser (\ts -> [(a, ts)])
+instance (Semigroup e) => Applicative (Parser t e) where
+    pure a = Parser (\ts -> Right ((a, ts) :| []))
     (<*>) = ap
 
-instance Monad (Parser t) where
+instance (Semigroup e) => Monad (Parser t e) where
     (>>=) p f = Parser (\ts -> do
-        (a, ts2) <- runParser p ts
-        (b, ts3) <- runParser (f a) ts2
-        pure (b, ts3)
-        )
+        res1 <- runParser p ts
+        foldl1 combineParses $ fmap (\(a, ts2) -> runParser (f a) ts2) res1)
 
-instance Alternative (Parser t) where
-    empty = Parser (\ts -> [])
-    (<|>) p1 p2 = Parser (\ts -> runParser p1 ts ++ runParser p2 ts)
+instance (Semigroup e) => Alternative (Parser t e) where
+    empty = Parser (\ts -> Left undefined)
+    (<|>) p1 p2 = Parser 
+        (\ts -> combineParses (runParser p1 ts) (runParser p2 ts))
 
 someSep :: (Alternative f) => f a -> f b -> f [b]
 someSep sep x = (:) <$> x <*> many (sep *> x)
@@ -42,33 +53,20 @@ someSep' sep x = (,) <$> x <*> many ((,) <$> sep <*> x)
 --manySep' not included because it is not needed for now, and the return type
 --would end up being something horrendous like (Maybe (f (a,[(b,a)])))
 
---Eager version of alternative. Dosen't consider p2 of p1 is a success.
-infixl 3 <<|>
-(<<|>) :: Parser t s -> Parser t s -> Parser t s
-(<<|>) p1 p2 = Parser (\ts -> let l = runParser p1 ts
-    in if null l then runParser p2 ts else l) 
+eager :: Parser t e a -> Parser t e a
+eager p = Parser e where
+    e ts = case runParser p ts of
+        Left e -> Left e
+        Right (x :| t) -> Right (x :| [])
 
---Eager version of many. Only parses the longest possible list. Maby will be
---usefull for unterminated lists?
-eagerMany :: Parser t a -> Parser t [a]
-eagerMany p = ((:) <$> p <*> eagerMany p) <<|> (pure [])
+match :: e -> (t -> e) -> (t -> Bool) -> Parser t e t
+match emptyError noMatchError pred = Parser match' where
+    match' [] = Left emptyError
+    match' (t:ts)
+        | pred t = Right ((t,ts) :| [])
+        | otherwise = Left (noMatchError t)
 
---Eager version of some. Only parses the longest possible list. Maby will be
---usefull for unterminated lists?
-eagerSome :: Parser t a -> Parser t [a]
-eagerSome p = (:) <$> p <*> eagerMany p
-
-eat :: (Eq a) => a -> Parser a a
-eat match = Parser eat' where
-    eat' [] = []
-    eat' (t:ts)
-        | t == match = [(t,ts)]
-        | otherwise = []
-
-tok :: (Eq a) => a -> b -> Parser a b
-tok a b = (eat a *> pure b)
-
-eof :: Parser a ()
-eof = Parser eof' where
-    eof' [] = [((), [])]
-    eof' t = []
+eof :: (t -> e) -> Parser t e ()
+eof notEmptyError = Parser eof' where
+    eof' [] = Right (((), []) :| [])
+    eof' (t:ts) = Left (notEmptyError t)
