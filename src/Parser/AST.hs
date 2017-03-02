@@ -66,7 +66,7 @@ data ASTExp =
 data ASTStmt =
       IfS ASTExp [ASTStmt] (Maybe [ASTStmt])
     | WhileS ASTExp [ASTStmt]
-    | AssignS Identifier ASTExp
+    | AssignS Identifier [Field] ASTExp
     | FunCallS Identifier [ASTExp]
     | ReturnS (Maybe ASTExp) deriving (Data, Show)
 

@@ -99,6 +99,7 @@ stmtp = ifp <|> whilep <|> assignp <|> funcallp <|> returnp where
         <*> brckt (many stmtp)
     assignp = AssignS . identName 
         <$> (eat (IdTok ""))
+        <*> (many fieldp)
         <*> (eat AssignTok *> expp 0 <* eat SemiColonTok) 
     funcallp = FunCallS . identName
         <$> eat (IdTok "")
