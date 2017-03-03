@@ -3,15 +3,18 @@ module Main where
 import Lib
 import Scanner
 import Parser.Parser
+import Parser.Combinators
 import Parser.Output
 import System.Environment
 
-testparse :: FilePath -> IO ()
-testparse pth = do
-    f <- readFile pth
-    drawAst $ parse splp f
+import Data.List.NonEmpty
+
+parse p str = case runParser (p <* seof) (alexScanTokens str) of
+        (Left errors) -> putStrLn (show errors)
+        (Right ((a,ts) :| [])) -> drawAst a
+        (Right (_ :| _)) -> putStrLn "Ambigous Parse. Fix you broken gramar!"
+
+parseFile p f = readFile f >>= parse p
 
 main :: IO ()
-main = do
-    input <- getLine
-    drawAst (parse funTypep input)
+main = putStrLn "Not doing anything yet. Run inside REPL to test stuff"
