@@ -11,20 +11,33 @@ import Data.Semigroup
 import Data.List.NonEmpty
 import qualified Data.Set as Set
 
-data ParseError = Expected (Set.Set (Maybe Token)) (Maybe Token) deriving (Show)
+type EnumToken = (Integer, Token)
+data ParseError = Expected
+    (Set.Set (Maybe Token))
+    (Maybe EnumToken) deriving (Show)
+
+--Nothing represents EOF
+further :: Maybe EnumToken -> Maybe EnumToken -> Bool
+further Nothing Nothing = False
+further Nothing _ = True
+further (Just _) Nothing = False
+further (Just (i1, _)) (Just (i2, _)) = i1 > i2
 
 instance Semigroup ParseError where
     (<>) (Expected s1 t1) (Expected s2 t2) 
-        | t1 == t2 = Expected (s1 <> s2) t1
-        | otherwise = Expected s1 t1
+        | further t1 t2 = Expected s1 t1
+        | further t2 t1 = Expected s2 t2
+        | otherwise = Expected (s1 <> s2) t1
 
-type SPLParser a = Parser Token ParseError a
+type SPLParser a = Parser (Integer, Token) ParseError a
+
+tokMatch t1 (_, t2) = t1 == t2
 
 tok :: Token -> a -> SPLParser a
 tok t a = match
     (Expected (Set.singleton (Just t)) Nothing)
     (\found -> Expected (Set.singleton (Just t)) (Just found)) 
-    ((==) t) *> pure a
+    (tokMatch t) *> pure a
 
 eat :: Token -> SPLParser ()
 eat t = tok t ()
@@ -39,11 +52,11 @@ sqbrk p = eat LSqBracketTok *> p <* eat RSqBracketTok
 identName (IdTok i) = i
 
 idp :: SPLParser Identifier
-idp = identName <$> match 
+idp = identName . snd <$> match 
     (Expected (Set.singleton (Just $ IdTok "")) Nothing)
     (\found -> Expected (Set.singleton (Just $ IdTok "")) (Just found))
     idp' where
-        idp' (IdTok _) = True
+        idp' (_, (IdTok _)) = True
         idp' _ = False
 
 typep :: SPLParser ASTType
