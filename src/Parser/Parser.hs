@@ -7,38 +7,57 @@ import Parser.AST
 import Control.Applicative
 import Control.Applicative.Alternative
 
-parse :: (Parser Token a) -> String -> a
-parse p s = (fst . head) (runParser (p <* eof) (alexScanTokens s))
+import Data.Semigroup
+import Data.List.NonEmpty
+
+type SPLParser a = Parser Token a
+
+tok :: Token -> a -> SPLParser a
+tok t a = match t (== t) *> pure a
+
+eat :: Token -> SPLParser ()
+eat t = tok t ()
+
+seof :: SPLParser ()
+seof = eat EofTok
 
 prnth p = eat LParTok *> p <* eat RParTok
 brckt p = eat LBracketTok *> p <* eat RBracketTok
 sqbrk p = eat LSqBracketTok *> p <* eat RSqBracketTok
 
-identName (IdTok i) = i
+idp :: SPLParser Identifier
+idp = (\(IdTok i) -> i) <$> match (IdTok "") idp' where
+    idp' (IdTok _) = True
+    idp' _ = False
 
-typep :: Parser Token ASTType
+intLitp :: SPLParser Int
+intLitp = (\(IntLitTok i) -> i) <$> match (IntLitTok 0) idp' where
+    idp' (IntLitTok _) = True
+    idp' _ = False
+
+typep :: SPLParser ASTType
 typep =
-        (eat BoolTok *> pure BoolT)
-    <|> (eat IntTok *> pure IntT)
-    <|> (eat CharTok *> pure CharT)
-    <|> (PairT <$> 
-                (eat LParTok *> typep)
-            <*> (eat CommaTok *> typep))
-            <*  eat RParTok
-    <|> (ListT <$> (eat LSqBracketTok *> typep <* eat RSqBracketTok))
-    <|> ((PolyT . (\(IdTok i) -> i)) <$> (eat (IdTok "does_not_matter")))
+        (tok BoolTok BoolT)
+    <|> (tok IntTok IntT)
+    <|> (tok CharTok CharT)
+    <|> ((uncurry PairT) <$> prnth ((,) <$> typep <*> (eat CommaTok *> typep)))
+    <|> (ListT <$> sqbrk typep)
+    <|> (PolyT <$> idp)
 
-returnTypep :: Parser Token ASTReturnType
-returnTypep = (eat VoidTok *> pure Void)  <|> (ReturnType <$> typep)
+returnTypep :: SPLParser ASTReturnType
+returnTypep = (tok VoidTok Void) <|> (ReturnType <$> typep)
 
-funTypep :: Parser Token ASTFunType
+funTypep :: SPLParser ASTFunType
 funTypep = FunType <$> (many typep <* eat ArrowTok) <*> returnTypep
 
-op1p :: Parser Token Op1
+op1p :: SPLParser Op1
 op1p = (tok MinusTok Neg) <|> (tok NotTok Not)
 
-op2p :: Precedence -> Parser Token Op2
-op2p pr = asum [(tok t p) | (t,p) <- op2TokenAst, precedence p == pr] where
+--Note: Using asum here might be dangerous if there are some precedence levels
+--with no operators, since the Alternative identity contains undefined in case
+--of error. Should not be a problem in practice.
+op2p :: Precedence -> SPLParser Op2
+op2p pr = foldl1 (<|>) [(tok t p) | (t,p) <- op2TokenAst, precedence p == pr] where
     op2TokenAst =
         [(EqTok, Equal), (NeTok, NotEq), (LtTok, Less)
         ,(LeTok, LessEq), (GtTok, Greater), (GeTok, GreaterEq)
@@ -46,7 +65,7 @@ op2p pr = asum [(tok t p) | (t,p) <- op2TokenAst, precedence p == pr] where
         ,(OrTok, Or), (TimesTok, Times), (DivTok, Div)
         ,(ModTok, Mod), (AndTok, And)]
 
-fieldp :: Parser Token Field
+fieldp :: SPLParser Field
 fieldp = eat DotTok *> fieldName where
     fieldName =
             (tok HdTok Hd)
@@ -54,7 +73,7 @@ fieldp = eat DotTok *> fieldName where
         <|> (tok FstTok Fst)
         <|> (tok SndTok Snd)
 
-expp :: Precedence -> Parser Token ASTExp
+expp :: Precedence -> SPLParser ASTExp
 expp pr = makeExpAst (assoc pr) <$> someSep' (op2p pr) (expp' pr) where
 
     rightifyExpList :: (b,[(a,b)]) -> ([(b,a)],b)
@@ -68,27 +87,23 @@ expp pr = makeExpAst (assoc pr) <$> someSep' (op2p pr) (expp' pr) where
         makeExpAst' (xs,x) = foldr (\(e1, o) e2 -> Op2E o e1 e2) x xs
 
     --TODO: What about Char?
-    expp' :: Precedence -> Parser Token ASTExp
+    expp' :: Precedence -> SPLParser ASTExp
     expp' pr
         | pr /= highestPrecedence = expp (pr + 1)
         | otherwise =
                 (tok FalseTok (BoolE False))
             <|> (tok TrueTok (BoolE True))
             <|> (tok EmptyListTok NilE)
-            <|> ((\(IdTok i) -> Var i) <$> eat (IdTok "") <*> many fieldp)
-            <|> ((\(IdTok i) -> FunCallE i) <$> 
-                    eat (IdTok "")
-                <*> (eat LParTok *> 
-                    manySep (eat CommaTok) (expp 0)
-                    <* eat RParTok))
+            <|> Var <$> idp <*> many fieldp
+            <|> FunCallE <$> idp <*> prnth (manySep (eat CommaTok) (expp 0))
             <|> (Op1E <$> op1p <*> expp' pr) -- unary ops binds tightest
-            <|> ((\(IntLitTok i) -> IntE i) <$> eat (IntLitTok 0))
+            <|> (IntE <$> intLitp)
             <|> (eat LParTok *> expp 0 <* eat RParTok)
             <|> (PairE <$>
                     (eat LParTok *> (expp 0 <* eat CommaTok)) 
                 <*> (expp 0 <* eat RParTok))
 
-stmtp :: Parser Token ASTStmt
+stmtp :: SPLParser ASTStmt
 stmtp = ifp <|> whilep <|> assignp <|> funcallp <|> returnp where
     ifp = IfS
         <$> ((eat IfTok) *> prnth (expp 0))
@@ -97,32 +112,32 @@ stmtp = ifp <|> whilep <|> assignp <|> funcallp <|> returnp where
     whilep = WhileS
         <$> (eat WhileTok *> prnth (expp 0))
         <*> brckt (many stmtp)
-    assignp = AssignS . identName 
-        <$> (eat (IdTok ""))
+    assignp = AssignS
+        <$> idp
         <*> (many fieldp)
         <*> (eat AssignTok *> expp 0 <* eat SemiColonTok) 
-    funcallp = FunCallS . identName
-        <$> eat (IdTok "")
+    funcallp = FunCallS
+        <$> idp
         <*> (prnth (manySep (eat CommaTok) (expp 0)) <* eat SemiColonTok)
     returnp = ReturnS
         <$> (eat ReturnTok *> optional (expp 0) <* eat SemiColonTok)
 
-varDeclp :: Parser Token ASTVarDecl
+varDeclp :: SPLParser ASTVarDecl
 varDeclp = VarDecl
     <$> ((eat VarTok *> pure Nothing) <|> Just <$> typep)
-    <*> (identName <$> eat (IdTok ""))
+    <*> idp
     <*> (eat AssignTok *> expp 0 <* eat SemiColonTok)
 
-funDeclp :: Parser Token ASTFunDecl
+funDeclp :: SPLParser ASTFunDecl
 funDeclp = FunDecl
-    <$> (identName <$> eat (IdTok ""))
-    <*> prnth (manySep (eat CommaTok) (identName <$> eat (IdTok "")))
+    <$> idp
+    <*> prnth (manySep (eat CommaTok) idp)
     <*> optional (eat OfTypeTok *> funTypep)
     <*> (eat LBracketTok *> many varDeclp)
     <*> (some stmtp <* eat RBracketTok)
 
-declp :: Parser Token ASTDecl
+declp :: SPLParser ASTDecl
 declp = (VarD <$> varDeclp) <|> (FunD <$> funDeclp)
 
-splp :: Parser Token AST
+splp :: SPLParser AST
 splp = some declp
