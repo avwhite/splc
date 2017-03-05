@@ -102,6 +102,7 @@ data Token =
     | NotTok
     | IntLitTok Int
     | IdTok String
+    | EofTok
     deriving (Data, Show, Ord)
 
 instance Eq Token where

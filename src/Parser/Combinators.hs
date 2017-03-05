@@ -5,39 +5,72 @@ import Control.Monad
 import Control.Applicative
 import Data.Semigroup
 import Data.List.NonEmpty
+import qualified Data.Set as Set
 
-type ParseResult t e a = Either e (NonEmpty (a, [t]))
-data Parser t e a = Parser ([t] -> ParseResult t e a)
+type ParseSuccesses t a = NonEmpty (a, [(Integer, t)])
+type ParseError t = ((Set.Set t), (Integer, t))
 
-runParser :: Parser t e a -> [t] -> ParseResult t e a
+data ParseResult t a = 
+      Success (ParseSuccesses t a)
+    | Error (ParseError t)
+    | Uncertain (ParseError t) (ParseSuccesses t a)
+
+data Parser t a = Parser ([(Integer, t)] -> ParseResult t a)
+
+parse :: Parser t a  -> [t] -> ParseResult t a
+parse (Parser p) = p . Prelude.zip [0..]
+
+runParser :: Parser t a -> [(Integer, t)] -> ParseResult t a
 runParser (Parser p) = p
 
-combineParses :: 
-    (Semigroup e) => 
-    ParseResult t e a -> 
-    ParseResult t e a -> 
-    ParseResult t e a
-combineParses (Left _) (Right l) = Right l
-combineParses (Right l) (Left _) = Right l
-combineParses (Left m1) (Left m2) = Left (m1 <> m2)
-combineParses (Right l1) (Right l2) = Right (l1 <> l2)
+combineErrors :: (Ord t) => ParseError t -> ParseError t -> ParseError t
+combineErrors (s1, (i1, e1)) (s2, (i2, e2))
+    | i1 == i2 = (Set.union s1 s2, (i1, e1)) -- i1 == i2 => e1 == e2
+    | i1 > i2 = (s1, (i1, e1))
+    | i2 > i1 = (s2, (i2, e2))
 
---technically I think we could provide a functor instance which does not
---require the Semigroup constraint on e, but this is easier.
-instance (Semigroup e) => Functor (Parser t e) where
+combineUncertainty e@(_, (i, _)) m
+    | any farEnough m = Success m
+    | otherwise = Uncertain e m
+      where
+        farEnough (_, []) = True
+        farEnough (_, ((i2, _):ts)) = i2 > i
+
+combineParses :: (Ord t) =>
+    ParseResult t a -> ParseResult t a -> ParseResult t a
+combineParses (Error e1) (Error e2) =
+    Error (combineErrors e1 e2)
+combineParses (Error e1) (Uncertain e2 m) =
+    Uncertain (combineErrors e1 e2) m
+combineParses (Error e) (Success m) =
+    combineUncertainty e m
+combineParses (Uncertain e1 m1) (Uncertain e2 m2) =
+    Uncertain (combineErrors e1 e2) (m1 <> m2)
+combineParses (Uncertain e m1) (Success m2) = 
+    combineUncertainty e (m2 <> m1)    
+combineParses (Success m1) (Success m2) =
+    Success (m1 <> m2)
+combineParses a b = combineParses b a
+
+instance (Ord t) => Functor (Parser t) where
     fmap = liftM
 
-instance (Semigroup e) => Applicative (Parser t e) where
-    pure a = Parser (\ts -> Right ((a, ts) :| []))
+instance (Ord t) => Applicative (Parser t) where
+    pure a = Parser (\ts -> Success ((a, ts) :| []))
     (<*>) = ap
 
-instance (Semigroup e) => Monad (Parser t e) where
-    (>>=) p f = Parser (\ts -> do
-        res1 <- runParser p ts
-        foldl1 combineParses $ fmap (\(a, ts2) -> runParser (f a) ts2) res1)
+instance (Ord t) => Monad (Parser t) where
+    (>>=) p f = Parser (\ts -> 
+        case runParser p ts of
+            (Error e) -> Error e
+            (Success res1) -> foldl1 combineParses $
+                fmap (\(a, ts2) -> runParser (f a) ts2) res1
+            (Uncertain e res1) -> foldl combineParses (Error e) $
+                fmap (\(a, ts2) -> runParser (f a) ts2) res1
+            )
 
-instance (Semigroup e) => Alternative (Parser t e) where
-    empty = Parser (\ts -> Left undefined)
+instance (Ord t) => Alternative (Parser t) where
+    empty = Parser (\ts -> Error undefined)
     (<|>) p1 p2 = Parser 
         (\ts -> combineParses (runParser p1 ts) (runParser p2 ts))
 
@@ -53,20 +86,22 @@ someSep' sep x = (,) <$> x <*> many ((,) <$> sep <*> x)
 --manySep' not included because it is not needed for now, and the return type
 --would end up being something horrendous like (Maybe (f (a,[(b,a)])))
 
-eager :: Parser t e a -> Parser t e a
+--With the new error system this seems a bit strange in the uncertain case...
+eager :: Parser t a -> Parser t a
 eager p = Parser e where
     e ts = case runParser p ts of
-        Left e -> Left e
-        Right (x :| t) -> Right (x :| [])
+        Error e -> Error e
+        Success (x :| t) -> Success (x :| [])
+        Uncertain e (x :| t) -> Uncertain e (x :| [])
 
-match :: e -> (t -> e) -> (t -> Bool) -> Parser t e t
-match emptyError noMatchError pred = Parser match' where
-    match' [] = Left emptyError
-    match' (t:ts)
-        | pred t = Right ((t,ts) :| [])
-        | otherwise = Left (noMatchError t)
+match :: t -> (t -> Bool) -> Parser t t
+match expected pred = Parser match' where
+    match' [] = error "Input Stream ended unexpectedly!"
+    match' ((i,t):ts)
+        | pred t = Success ((t,ts) :| [])
+        | otherwise = Error (Set.singleton expected, (i,t))
 
-eof :: (t -> e) -> Parser t e ()
-eof notEmptyError = Parser eof' where
-    eof' [] = Right (((), []) :| [])
-    eof' (t:ts) = Left (notEmptyError t)
+--eof :: (t -> e) -> Parser t e ()
+--eof notEmptyError = Parser eof' where
+--    eof' [] = Right (((), []) :| [])
+--    eof' (t:ts) = Left (notEmptyError t)

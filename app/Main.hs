@@ -9,12 +9,12 @@ import System.Environment
 
 import Data.List.NonEmpty
 
-parse p str = case runParser (p <* seof) (Prelude.zip [0..] (alexScanTokens str)) of
-        (Left errors) -> putStrLn (show errors)
-        (Right ((a,ts) :| [])) -> drawAst a
-        (Right (_ :| _)) -> putStrLn "Ambigous Parse. Fix you broken gramar!"
+parseStr p str = case parse (p <* seof) (alexScanTokens str ++ [EofTok]) of
+        (Error errors) -> putStrLn (show errors)
+        (Success ((a,ts) :| [])) -> drawAst a
+        (Success (_ :| _)) -> putStrLn "Ambigous Parse. Fix you broken gramar!"
 
-parseFile p f = readFile f >>= parse p
+parseFile p f = readFile f >>= parseStr p
 
 main :: IO ()
 main = putStrLn "Not doing anything yet. Run inside REPL to test stuff"
