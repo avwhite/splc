@@ -1,6 +1,5 @@
 module Parser.Parser where
 
-import Scanner
 import Parser.Combinators
 import Parser.AST
 

@@ -8,12 +8,12 @@ import Data.List.NonEmpty
 import qualified Data.Set as Set
 
 type ParseSuccesses t a = NonEmpty (a, [(Integer, t)])
-type ParseError t = ((Set.Set t), (Integer, t))
+type ParseError t = ((Set.Set t), Maybe (Integer, t))
 
 data ParseResult t a = 
       Success (ParseSuccesses t a)
     | Error (ParseError t)
-    | Uncertain (ParseError t) (ParseSuccesses t a)
+    | Uncertain (ParseError t) (ParseSuccesses t a) deriving (Show)
 
 data Parser t a = Parser ([(Integer, t)] -> ParseResult t a)
 
@@ -24,33 +24,43 @@ runParser :: Parser t a -> [(Integer, t)] -> ParseResult t a
 runParser (Parser p) = p
 
 combineErrors :: (Ord t) => ParseError t -> ParseError t -> ParseError t
-combineErrors (s1, (i1, e1)) (s2, (i2, e2))
-    | i1 == i2 = (Set.union s1 s2, (i1, e1)) -- i1 == i2 => e1 == e2
-    | i1 > i2 = (s1, (i1, e1))
-    | i2 > i1 = (s2, (i2, e2))
+combineErrors (s1, Just (i1, e1)) (s2, Just (i2, e2))
+    | i1 == i2 = (Set.union s1 s2, Just (i1, e1)) -- i1 == i2 => e1 == e2
+    | i1 > i2 = (s1, Just (i1, e1))
+    | i2 > i1 = (s2, Just (i2, e2))
+combineErrors (s1, Nothing) (s2, Just (i2, e2)) = (s1, Nothing)
+combineErrors (s1, Just (i1, e1)) (s2, Nothing) = (s2, Nothing)
+combineErrors (s1, Nothing) (s2, Nothing) = (Set.union s1 s2, Nothing)
 
-combineUncertainty e@(_, (i, _)) m
+
+combineUncertainty e@(_, Just (i, _)) m
     | any farEnough m = Success m
     | otherwise = Uncertain e m
       where
         farEnough (_, []) = True
         farEnough (_, ((i2, _):ts)) = i2 > i
+combineUncertainty e@(_, Nothing) m
+    | any farEnough m = Success m
+    | otherwise = Uncertain e m
+      where
+        farEnough (_, []) = True
+        farEnough _ = False
 
 combineParses :: (Ord t) =>
     ParseResult t a -> ParseResult t a -> ParseResult t a
-combineParses (Error e1) (Error e2) =
-    Error (combineErrors e1 e2)
-combineParses (Error e1) (Uncertain e2 m) =
-    Uncertain (combineErrors e1 e2) m
-combineParses (Error e) (Success m) =
-    combineUncertainty e m
+combineParses (Error e1) (Error e2) = Error (combineErrors e1 e2)
+combineParses (Success m1) (Success m2) = Success (m1 <> m2)
 combineParses (Uncertain e1 m1) (Uncertain e2 m2) =
     Uncertain (combineErrors e1 e2) (m1 <> m2)
-combineParses (Uncertain e m1) (Success m2) = 
-    combineUncertainty e (m2 <> m1)    
-combineParses (Success m1) (Success m2) =
-    Success (m1 <> m2)
-combineParses a b = combineParses b a
+
+combineParses (Error e1) (Uncertain e2 m) = Uncertain (combineErrors e1 e2) m
+combineParses (Uncertain e1 m) (Error e2) = Uncertain (combineErrors e1 e2) m
+
+combineParses (Error e) (Success m) = combineUncertainty e m
+combineParses (Success m) (Error e) = combineUncertainty e m
+
+combineParses (Uncertain e m1) (Success m2) = combineUncertainty e (m1 <> m2)   
+combineParses (Success m1) (Uncertain e m2) = combineUncertainty e (m1 <> m2)
 
 instance (Ord t) => Functor (Parser t) where
     fmap = liftM
@@ -96,12 +106,12 @@ eager p = Parser e where
 
 match :: t -> (t -> Bool) -> Parser t t
 match expected pred = Parser match' where
-    match' [] = error "Input Stream ended unexpectedly!"
+    match' [] = Error (Set.singleton expected, Nothing)
     match' ((i,t):ts)
         | pred t = Success ((t,ts) :| [])
-        | otherwise = Error (Set.singleton expected, (i,t))
+        | otherwise = Error (Set.singleton expected, Just (i,t))
 
---eof :: (t -> e) -> Parser t e ()
---eof notEmptyError = Parser eof' where
---    eof' [] = Right (((), []) :| [])
---    eof' (t:ts) = Left (notEmptyError t)
+eof :: Parser t ()
+eof = Parser eof' where
+    eof' [] = Success (((), []) :| [])
+    eof' (t:ts) = Error (Set.empty, Just t)

@@ -79,3 +79,52 @@ data ASTFunDecl =
 data ASTDecl = FunD ASTFunDecl | VarD ASTVarDecl deriving (Data, Show)
 
 type AST = [ASTDecl]
+
+data Token =
+     AssignTok
+    |  VarTok
+    | SemiColonTok
+    | LParTok
+    | RParTok
+    | OfTypeTok
+    | LBracketTok
+    | RBracketTok
+    | VoidTok
+    | ArrowTok
+    | CommaTok
+    | LSqBracketTok
+    | RSqBracketTok
+    | IntTok
+    | BoolTok
+    | CharTok
+    | IfTok
+    | ElseTok
+    | WhileTok
+    | ReturnTok
+    | FalseTok
+    | TrueTok
+    | EmptyListTok
+    | HdTok
+    | TlTok
+    | FstTok
+    | SndTok
+    | DotTok
+    | PlusTok
+    | MinusTok
+    | TimesTok
+    | DivTok
+    | ModTok
+    | EqTok
+    | LtTok
+    | GtTok
+    | LeTok
+    | GeTok
+    | NeTok
+    | AndTok
+    | OrTok
+    | ColonTok
+    | NotTok
+    | IntLitTok Int
+    | IdTok String
+    | EofTok
+    deriving (Data, Show, Eq, Ord)
