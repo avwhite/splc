@@ -55,8 +55,10 @@
 \begin{itemize}
 \item Parser combinators as presented in class.
 \item With Haskell we only need \lstinline{bind}, \lstinline{pure}, and \lstinline{<|>}. We get a bunch of other stuff for free. Simple!
-\item Until we want to handle errors!
+\item<2-> Until we want to handle errors!
 \end{itemize}
+\pause
+\pause
 
 \begin{lstlisting}
 instance (Ord t) => Monad (Parser t) where
@@ -85,6 +87,8 @@ combineParses (Uncertain e1 m1) (Uncertain e2 m2) =
     Uncertain (combineErrors e1 e2) (m1 <> m2)
 \end{lstlisting}
 
+\pause
+
 The concept behind uncertain:
 \begin{figure}
 \includegraphics[width=10cm]{drawing}
@@ -105,7 +109,9 @@ scanner = catMaybes <$>
     (many $ (whitespace <|> symbol <|> intLit <|> ident)) 
 \end{lstlisting}
 
-\begin{itemize}
+\pause
+
+\begin{itemize}[<+->]
 \item produces \lstinline{Maybe} values, so we can ignore white space.
 \item Each sub parser uses the eager function to produce longest match.
     \begin{itemize}
@@ -170,12 +176,34 @@ foldl (\e1 (op, e2) -> Op2E op e1 e2) x oxs
 To do the right fold we need a list of expression-operator pairs and the \emph{last} expression to do the fold. This is quite easy to achieve with a bit of massaging. 
 \end{frame}
 
+\section{Pretty printing}
+\begin{frame}[fragile]
+\frametitle{Pretty printing}
+``Continuation passing'' style of printing
+\begin{lstlisting}
+type Printer = [String] -> [String]
+
+prnt :: String -> Printer
+prnt s = \c -> s:c
+
+prettyPrint :: AST -> String
+prettyPrint ast = mconcat $ printAST ast $ []
+\end{lstlisting}
+
+With these definitions we can write printers like
+
+\begin{lstlisting}
+printType (ListT t) = prnt "[" . printType t . prnt "]"
+\end{lstlisting}
+
+\end{frame}
+
 \section{Tests}
 \begin{frame}
 \frametitle{Tests}
 
 \begin{itemize}
-\item We have verified that the parser works on some of the given example programs.
+\item We have verified that the parser and printer works on some of the given example programs.
 \item Every well typed AST is syntactically valid, so we should be able to automatically generate test cases with QuickCheck.
 \end{itemize}
 
@@ -189,11 +217,12 @@ To do the right fold we need a list of expression-operator pairs and the \emph{l
 \end{itemize}
 \end{frame}
 \begin{frame}
-\frametitle{Things that does not work yet}
+\frametitle{What needs to be done}
 \begin{itemize}
+\item We should automate testing, so we can run on a list of inputs (maybe even on randomly generated inputs) every time we change something.
 \item It is possible to cause the parser to backtrack a lot in some cases (nested parenthesis). Should be easy to fix by left factoring the grammar.
+\item Pretty Printing fully parenthesizes expressions.
 \item We don't have comments or character literals implemented.
-\item Pretty Printing?
 \end{itemize}
 \end{frame}
 \end{document}
