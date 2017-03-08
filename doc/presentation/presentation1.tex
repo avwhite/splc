@@ -41,7 +41,7 @@
 \item Split scan and parse phase
     \begin{itemize}
     \item Scanner implemented with parser combinators
-    \item Recursive descent parser (with some backtracking).
+    \item Recursive descent parser.
     \end{itemize}
 \item Generally works great, but bad performance on some inputs (nested parenthesis)
 \end{itemize}
@@ -174,9 +174,11 @@ To do the right fold we need a list of expression-operator pairs and the \emph{l
 \begin{frame}
 \frametitle{Tests}
 
-What kind of testing have we done? What should we include here? It seems like we get decent parses of the examples I have tried. With the pretty printer we can do more testing.
+\begin{itemize}
+\item We have verified that the parser works on some of the given example programs.
+\item Every well typed AST is syntactically valid, so we should be able to automatically generate test cases with QuickCheck.
+\end{itemize}
 
-All AST which type check are syntactically valid. We can use this to automatically generate test cases with QuickCheck I think!
 \end{frame}
 
 \section{Extra}
@@ -191,7 +193,7 @@ All AST which type check are syntactically valid. We can use this to automatical
 \begin{itemize}
 \item It is possible to cause the parser to backtrack a lot in some cases (nested parenthesis). Should be easy to fix by left factoring the grammar.
 \item We don't have comments or character literals implemented.
-\item (Pretty Printing)?????
+\item Pretty Printing?
 \end{itemize}
 \end{frame}
 \end{document}
