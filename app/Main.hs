@@ -10,6 +10,22 @@ import Parser.AST
 
 import Data.List.NonEmpty
 
+scanParse p str = 
+    case scan str of 
+        Success ((ts,cs) :| []) -> case parse (p <* eof) ts of
+            (Error errors) -> error (show errors)
+            (Success ((a,ts) :| [])) -> a
+            (Success (_ :| _)) -> error "Ambigous parse!"
+        (Error errors) -> error (show errors)
+        (Success (_ :| _)) -> error "Ambigous scan!"
+
+testProgram f = do
+    s <- readFile f
+    let ast = scanParse splp s
+    let prgm = prettyPrint ast
+    let ast2 = scanParse splp prgm
+    putStrLn (show (ast == ast2))
+
 parseStr p str = 
     case scan str of 
         Success ((ts,cs) :| []) -> case parse (p <* eof) ts of
