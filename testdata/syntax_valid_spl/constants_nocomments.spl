@@ -1,0 +1,12 @@
+Int a = 0;
+Int b = 10;
+Int c = -0;
+
+Bool d = True;
+Bool e = False;
+
+Bool f = 10;
+Int g = True;
+
+var h = 50;
+var i = True;

@@ -1,6 +1,5 @@
 module Parser.Combinators where
 
-import Scanner
 import Control.Monad
 import Control.Applicative
 import Data.Semigroup
@@ -19,6 +18,12 @@ data Parser t a = Parser ([(Integer, t)] -> ParseResult t a)
 
 parse :: Parser t a  -> [t] -> ParseResult t a
 parse (Parser p) = p . Prelude.zip [0..]
+
+toEither :: (Show t) => ParseResult t a -> Either String a
+toEither (Success ((a, []) :| [])) = Right a
+toEither (Success _) = Left "Ambigous parse. Compiler bug"
+toEither (Error e) = Left (show e)
+toEither (Uncertain _ _) = Left "Uncertain parse. Probably compiler bug"
 
 runParser :: Parser t a -> [(Integer, t)] -> ParseResult t a
 runParser (Parser p) = p

@@ -1,7 +1,9 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveGeneric #-}
 module Parser.AST where
 
 import Data.Data
+import GHC.Generics hiding (Associativity)
 
 type Identifier = String
 
@@ -11,19 +13,20 @@ data ASTType =
     | CharT
     | PairT ASTType ASTType
     | ListT ASTType
-    | PolyT Identifier deriving (Data, Show, Eq)
+    | PolyT Identifier deriving (Generic, Data, Show, Eq)
+
 data ASTReturnType =
       Void
-    | ReturnType ASTType deriving (Data, Show, Eq)
-data ASTFunType = FunType [ASTType] ASTReturnType deriving (Data, Show, Eq)
+    | ReturnType ASTType deriving (Generic, Data, Show, Eq)
+data ASTFunType = FunType [ASTType] ASTReturnType deriving (Generic, Data, Show, Eq)
 
-data Op1 = Neg | Not deriving (Data, Show, Eq)
+data Op1 = Neg | Not deriving (Generic, Data, Show, Eq)
 
 data Op2 =
       Plus | Minus | Times | Div | Mod
     | Equal | Less | Greater | LessEq | GreaterEq | NotEq
     | And | Or
-    | Cons deriving (Data, Show, Eq)
+    | Cons deriving (Generic, Data, Show, Eq)
 
 type Precedence = Int
 data Associativity = LeftAssoc | RightAssoc
@@ -50,7 +53,7 @@ assoc :: Precedence -> Associativity
 assoc 2 = RightAssoc
 assoc _ = LeftAssoc
 
-data Field = Hd | Tl | Fst | Snd deriving (Data, Show, Eq)
+data Field = Hd | Tl | Fst | Snd deriving (Generic, Data, Show, Eq)
 
 data ASTExp =
       Var Identifier [Field]
@@ -61,22 +64,22 @@ data ASTExp =
     | CharE Char
     | BoolE Bool
     | NilE
-    | PairE ASTExp ASTExp deriving (Data, Show, Eq)
+    | PairE ASTExp ASTExp deriving (Generic, Data, Show, Eq)
 
 data ASTStmt =
       IfS ASTExp [ASTStmt] (Maybe [ASTStmt])
     | WhileS ASTExp [ASTStmt]
     | AssignS Identifier [Field] ASTExp
     | FunCallS Identifier [ASTExp]
-    | ReturnS (Maybe ASTExp) deriving (Data, Show, Eq)
+    | ReturnS (Maybe ASTExp) deriving (Generic, Data, Show, Eq)
 
 data ASTVarDecl = VarDecl (Maybe ASTType) Identifier ASTExp
-    deriving (Data, Show, Eq)
+    deriving (Generic, Data, Show, Eq)
 data ASTFunDecl =
     FunDecl Identifier [Identifier] (Maybe ASTFunType) [ASTVarDecl] [ASTStmt]
-    deriving (Data, Show, Eq)
+    deriving (Generic, Data, Show, Eq)
 
-data ASTDecl = FunD ASTFunDecl | VarD ASTVarDecl deriving (Data, Show, Eq)
+data ASTDecl = FunD ASTFunDecl | VarD ASTVarDecl deriving (Generic, Data, Show, Eq)
 
 type AST = [ASTDecl]
 
