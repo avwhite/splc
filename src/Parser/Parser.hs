@@ -29,7 +29,7 @@ idp = (\(IdTok i) -> i) <$> match (IdTok "") idp' where
     idp' (IdTok _) = True
     idp' _ = False
 
-intLitp :: SPLParser Int
+intLitp :: SPLParser Integer
 intLitp = (\(IntLitTok i) -> i) <$> match (IntLitTok 0) idp' where
     idp' (IntLitTok _) = True
     idp' _ = False

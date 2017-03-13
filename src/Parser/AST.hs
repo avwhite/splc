@@ -60,7 +60,7 @@ data ASTExp =
     | Op2E Op2 ASTExp ASTExp
     | Op1E Op1 ASTExp
     | FunCallE Identifier [ASTExp]
-    | IntE Int
+    | IntE Integer
     | CharE Char
     | BoolE Bool
     | NilE
@@ -127,7 +127,7 @@ data Token =
     | OrTok
     | ColonTok
     | NotTok
-    | IntLitTok Int
+    | IntLitTok Integer
     | IdTok String
     | EofTok
     deriving (Data, Eq, Show, Ord)
