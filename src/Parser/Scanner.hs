@@ -32,7 +32,7 @@ scanner = catMaybes <$> (eagerMany $ ((blockComment <|> lineComment) <<|> whites
     ident = (Just . wordToToken ) <$> 
         ((:) 
             <$> (match 'a' isAlpha)
-            <*> ((eagerMany) $ match 'a' isAlphaNum))
+            <*> ((eagerMany) $ match 'a' (\c -> isAlphaNum c || c == '_')))
     intLit = (Just . IntLitTok . read) <$> ((eager . some) $ match '0' isDigit)
     symbol = Just <$> (
             (tok "==" EqTok)
