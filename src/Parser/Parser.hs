@@ -139,4 +139,4 @@ declp :: SPLParser ASTDecl
 declp = (VarD <$> varDeclp) <|> (FunD <$> funDeclp)
 
 splp :: SPLParser AST
-splp = some declp
+splp = AST <$> some declp

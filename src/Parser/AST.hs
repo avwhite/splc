@@ -13,20 +13,20 @@ data ASTType =
     | CharT
     | PairT ASTType ASTType
     | ListT ASTType
-    | PolyT Identifier deriving (Generic, Data, Show, Eq)
+    | PolyT Identifier deriving (Generic, Data, Eq)
 
 data ASTReturnType =
       Void
-    | ReturnType ASTType deriving (Generic, Data, Show, Eq)
-data ASTFunType = FunType [ASTType] ASTReturnType deriving (Generic, Data, Show, Eq)
+    | ReturnType ASTType deriving (Generic, Data, Eq)
+data ASTFunType = FunType [ASTType] ASTReturnType deriving (Generic, Data, Eq)
 
-data Op1 = Neg | Not deriving (Generic, Data, Show, Eq)
+data Op1 = Neg | Not deriving (Generic, Data, Eq)
 
 data Op2 =
       Plus | Minus | Times | Div | Mod
     | Equal | Less | Greater | LessEq | GreaterEq | NotEq
     | And | Or
-    | Cons deriving (Generic, Data, Show, Eq)
+    | Cons deriving (Generic, Data, Eq)
 
 type Precedence = Int
 data Associativity = LeftAssoc | RightAssoc
@@ -53,7 +53,7 @@ assoc :: Precedence -> Associativity
 assoc 2 = RightAssoc
 assoc _ = LeftAssoc
 
-data Field = Hd | Tl | Fst | Snd deriving (Generic, Data, Show, Eq)
+data Field = Hd | Tl | Fst | Snd deriving (Generic, Data, Eq)
 
 data ASTExp =
       Var Identifier [Field]
@@ -64,24 +64,24 @@ data ASTExp =
     | CharE Char
     | BoolE Bool
     | NilE
-    | PairE ASTExp ASTExp deriving (Generic, Data, Show, Eq)
+    | PairE ASTExp ASTExp deriving (Generic, Data, Eq)
 
 data ASTStmt =
       IfS ASTExp [ASTStmt] (Maybe [ASTStmt])
     | WhileS ASTExp [ASTStmt]
     | AssignS Identifier [Field] ASTExp
     | FunCallS Identifier [ASTExp]
-    | ReturnS (Maybe ASTExp) deriving (Generic, Data, Show, Eq)
+    | ReturnS (Maybe ASTExp) deriving (Generic, Data, Eq)
 
 data ASTVarDecl = VarDecl (Maybe ASTType) Identifier ASTExp
-    deriving (Generic, Data, Show, Eq)
+    deriving (Generic, Data, Eq)
 data ASTFunDecl =
     FunDecl Identifier [Identifier] (Maybe ASTFunType) [ASTVarDecl] [ASTStmt]
-    deriving (Generic, Data, Show, Eq)
+    deriving (Generic, Data, Eq)
 
-data ASTDecl = FunD ASTFunDecl | VarD ASTVarDecl deriving (Generic, Data, Show, Eq)
+data ASTDecl = FunD ASTFunDecl | VarD ASTVarDecl deriving (Generic, Data, Eq)
 
-type AST = [ASTDecl]
+data AST = AST [ASTDecl] deriving (Generic, Data, Eq)
 
 data Token =
      AssignTok
@@ -130,4 +130,4 @@ data Token =
     | IntLitTok Int
     | IdTok String
     | EofTok
-    deriving (Data, Show, Eq, Ord)
+    deriving (Data, Eq, Show, Ord)

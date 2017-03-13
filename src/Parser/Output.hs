@@ -60,6 +60,9 @@ data2tree = (gdefault `ext1Q` atList) `extQ` atString `extQ` atAstExp
 drawAst :: Data t => t -> IO ()
 drawAst = putStr . drawTree . data2tree
 
+instance Show AST where
+    show = drawTree . data2tree
+
 type Printer = [String] -> [String]
 
 prettyPrint :: AST -> String
@@ -208,4 +211,4 @@ printFunDecl i (FunDecl id args mt dcls ss) =
 printDecl i (FunD d) = printFunDecl i d
 printDecl i (VarD d) = printVarDecl i d
 
-printAST dcls = prntListSep (prnt "\n") (printDecl 0) dcls
+printAST (AST dcls) = prntListSep (prnt "\n") (printDecl 0) dcls
