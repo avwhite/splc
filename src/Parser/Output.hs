@@ -107,8 +107,9 @@ printRetType Void = prnt "Void"
 printRetType (ReturnType t) = printType t
 
 printFunType :: ASTFunType -> Printer
-printFunType (FunType ts rt) = 
-      prntListSep (prnt " ") printType ts
+printFunType (FunType ts rt) =
+      prnt ":: "
+    . prntListSep (prnt " ") printType ts
     . prnt " -> "
     . printRetType rt
 
@@ -203,7 +204,7 @@ printVarDecl i (VarDecl Nothing id e) =
 printFunDecl i (FunDecl id args mt dcls ss) =
       indent i . prnt id . prnt "("
     . prntListSep (prnt ", ") prnt args
-    . prnt ") :: " . prntMaybe printFunType mt . prnt " {\n"
+    . prnt ") " . prntMaybe printFunType mt . prnt " {\n"
     . prntList (printVarDecl (i+1)) dcls
     . prntList (printStmt (i+1)) ss
     . indent i . prnt "}\n"
