@@ -101,13 +101,32 @@ someSep' sep x = (,) <$> x <*> many ((,) <$> sep <*> x)
 --manySep' not included because it is not needed for now, and the return type
 --would end up being something horrendous like (Maybe (f (a,[(b,a)])))
 
---With the new error system this seems a bit strange in the uncertain case...
+--Eager behavior with sane error messages. Does not seem to give the
+--Performance benefit of eager behavior.
 eager :: Parser t a -> Parser t a
 eager p = Parser e where
     e ts = case runParser p ts of
         Error e -> Error e
         Success (x :| t) -> Success (x :| [])
         Uncertain e (x :| t) -> Uncertain e (x :| [])
+
+--eager functions that hopefully gives better performance. Totally
+--sacrifices sane error messages.
+infixl 3 <<|>
+(<<|>) :: Parser t a -> Parser t a -> Parser t a
+(<<|>) p1 p2 = Parser
+    (\ts -> case runParser p1 ts of
+        Error e -> runParser p2 ts
+        Uncertain e m -> Success m
+        Success m -> Success m)
+
+eagerMany :: (Ord t) => Parser t a -> Parser t [a]
+eagerMany p = ((:) <$> p <*> eagerMany p) <<|> (pure [])
+
+eagerSome :: (Ord t) => Parser t a -> Parser t [a]
+eagerSome p = (:) <$> p <*> eagerMany p
+
+--Basic parsers.
 
 match :: t -> (t -> Bool) -> Parser t t
 match expected pred = Parser match' where

@@ -17,42 +17,42 @@ eat cs = foldr (liftA2 (:)) (pure []) $ (fmap one cs) where
 tok :: String -> Token -> Parser Char Token
 tok str tok = eat str *> pure tok
 
-scanner = catMaybes <$> (many $ (whitespace <|> symbol <|> intLit <|> ident)) where
-    whitespace = ((eager . some) $ match ' ' isSpace) *> pure Nothing
+scanner = catMaybes <$> (eagerMany $ (whitespace <<|> symbol <<|> intLit <<|> ident)) where
+    whitespace = ((eagerSome) $ match ' ' isSpace) *> pure Nothing
     ident = (Just . wordToToken ) <$> 
         ((:) 
             <$> (match 'a' isAlpha)
-            <*> ((eager . many) $ match 'a' isAlphaNum))
+            <*> ((eagerMany) $ match 'a' isAlphaNum))
     intLit = (Just . IntLitTok . read) <$> ((eager . some) $ match '0' isDigit)
-    symbol = Just <$> (eager $ 
+    symbol = Just <$> (
             (tok "==" EqTok)
-        <|> (tok "<=" LeTok)
-        <|> (tok ">=" GeTok)
-        <|> (tok "!=" NeTok)
-        <|> (tok "&&" AndTok)
-        <|> (tok "||" OrTok)
-        <|> (tok "[]" EmptyListTok)
-        <|> (tok "=" AssignTok)
-        <|> (tok ";" SemiColonTok)
-        <|> (tok "(" LParTok)
-        <|> (tok ")" RParTok)
-        <|> (tok "::" OfTypeTok)
-        <|> (tok "{" LBracketTok)
-        <|> (tok "}" RBracketTok)
-        <|> (tok "->" ArrowTok)
-        <|> (tok "," CommaTok)
-        <|> (tok "[" LSqBracketTok)
-        <|> (tok "]" RSqBracketTok)
-        <|> (tok "." DotTok)
-        <|> (tok "+" PlusTok)
-        <|> (tok "-" MinusTok)
-        <|> (tok "*" TimesTok)
-        <|> (tok "/" DivTok)
-        <|> (tok "%" ModTok)
-        <|> (tok "<" LtTok)
-        <|> (tok ">" GtTok)
-        <|> (tok ":" ColonTok)
-        <|> (tok "!" NotTok))
+        <<|> (tok "<=" LeTok)
+        <<|> (tok ">=" GeTok)
+        <<|> (tok "!=" NeTok)
+        <<|> (tok "&&" AndTok)
+        <<|> (tok "||" OrTok)
+        <<|> (tok "[]" EmptyListTok)
+        <<|> (tok "=" AssignTok)
+        <<|> (tok ";" SemiColonTok)
+        <<|> (tok "(" LParTok)
+        <<|> (tok ")" RParTok)
+        <<|> (tok "::" OfTypeTok)
+        <<|> (tok "{" LBracketTok)
+        <<|> (tok "}" RBracketTok)
+        <<|> (tok "->" ArrowTok)
+        <<|> (tok "," CommaTok)
+        <<|> (tok "[" LSqBracketTok)
+        <<|> (tok "]" RSqBracketTok)
+        <<|> (tok "." DotTok)
+        <<|> (tok "+" PlusTok)
+        <<|> (tok "-" MinusTok)
+        <<|> (tok "*" TimesTok)
+        <<|> (tok "/" DivTok)
+        <<|> (tok "%" ModTok)
+        <<|> (tok "<" LtTok)
+        <<|> (tok ">" GtTok)
+        <<|> (tok ":" ColonTok)
+        <<|> (tok "!" NotTok))
 
 wordToToken :: String -> Token
 wordToToken "var" = VarTok
