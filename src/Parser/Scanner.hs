@@ -17,7 +17,12 @@ eat cs = foldr (liftA2 (:)) (pure []) $ (fmap one cs) where
 tok :: String -> Token -> Parser Char Token
 tok str tok = eat str *> pure tok
 
-scanner = catMaybes <$> (eagerMany $ (whitespace <<|> symbol <<|> intLit <<|> ident)) where
+scanner = catMaybes <$> (eagerMany $ (lineComment <<|> whitespace <<|> symbol <<|> intLit <<|> ident)) where
+    lineComment =
+           eat "//"
+        *> many (match 'a' (/= '\n'))
+        *> match 'n' (== '\n')
+        *> pure Nothing
     whitespace = ((eagerSome) $ match ' ' isSpace) *> pure Nothing
     ident = (Just . wordToToken ) <$> 
         ((:) 
