@@ -169,6 +169,23 @@ typeInferExp (Op2E o e1 e2) ctx t =
     typeInferExp  e1 ctx (opInType o) >>=
     typeInferExp' e2 ctx (opInType o) >>=
     lift . (mgu' t (opOutType o))
+typeInferExp (Op1E Neg e) ctx t =
+    typeInferExp e ctx t >>=
+    lift . (mgu' t TInt)
+typeInferExp (Op1E Not e) ctx t =
+    typeInferExp e ctx TBool >>=
+    lift . (mgu' t TBool)
+typeInferExp (PairE e1 e2) ctx t =
+    freshVar >>= \a ->
+    freshVar >>= \b ->
+    typeInferExp e1 ctx a >>=
+    typeInferExp' e2 ctx b >>=
+    lift . (mgu' t (TPair a b))
+typeInferExp (FunCallE id es) ctx t = do
+    vs <- replicateM (length es) freshVar
+    s <- typeInferExp (Var id []) ctx (TArrow vs t)
+    foldM (flip $ \(e, a) -> typeInferExp' e ctx a) s (zip es vs)
+
 
 --Keep this for the presentation to show before vs after
 --typeInferExp (Op2E o e1 e2) ctx t = do
