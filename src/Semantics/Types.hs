@@ -59,6 +59,7 @@ instance Substable Type where
 instance Substable TypeContext where
     subst s (TypeContext c) = TypeContext $ fmap (\(id,t) -> (id, subst s t)) c
 
+--TODO: Should the variables bound in the quantifier by ignored?
 instance Substable TypeScheme where
     subst s (TypeScheme a t) = TypeScheme a (subst s t)
 
@@ -165,7 +166,6 @@ typeInferExp (Op2E Cons e1 e2) ctx t =
     typeInferExp' e2 ctx (TList a) >>=
     lift . (mgu' t (TList a))
 typeInferExp (Op2E o e1 e2) ctx t =
-    freshVar >>= \a ->
     typeInferExp  e1 ctx (opInType o) >>=
     typeInferExp' e2 ctx (opInType o) >>=
     lift . (mgu' t (opOutType o))
