@@ -38,8 +38,10 @@ test_ppp_on_syntactically_correct_programs = do
 test_mgu = [
         testCase "Pair successfull unification" test1,
         testCase "Pair unsuccessfull unification" test2,
-        testCase "Arrow successfull unification" test3,
-        testCase "Arrow unsuccessfull unification" test4
+        testCase "Arrow successfull unification 1" test3,
+        testCase "Arrow unsuccessfull unification 1" test4,
+        testCase "Arrow successfull unification 2" test5,
+        testCase "Arrow unsuccessfull unification 2" test6
     ] where
     test1 = subst u t1 @?= subst u t2  where
         t1 = (TPair (TVar (NamedTV "a")) TBool)
@@ -55,6 +57,13 @@ test_mgu = [
     test4 = mgu t1 t2 @?= Nothing  where
         t1 = (TArrow [(TVar (NamedTV "a")), TBool] TVoid)
         t2 = (TArrow [TInt, (TVar (NamedTV "a"))] TVoid)
+    test5 = subst u t1 @?= subst u t2  where
+        t1 = (TArrow [TVar (NamedTV "a"), TVar (NamedTV "a")] TVoid)
+        t2 = (TArrow [TInt, TInt] TVoid)
+        u = fromJust $ mgu t1 t2
+    test6 = mgu t1 t2 @?= Nothing  where
+        t1 = (TArrow [TVar (NamedTV "a"), TVar (NamedTV "a")] TVoid)
+        t2 = (TArrow [TInt, TBool] TVoid)
 
 
 test_type_inference =
