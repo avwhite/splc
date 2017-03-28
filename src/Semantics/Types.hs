@@ -41,9 +41,9 @@ freshVar = do
     pure (TVar (InternalTV freshVar))
 
 
-data TypeScheme = TypeScheme [TVarId] Type
+data TypeScheme = TypeScheme [TVarId] Type deriving (Show)
 
-newtype TypeContext = TypeContext [(Identifier,Type)] deriving (Monoid)
+newtype TypeContext = TypeContext [(Identifier,TypeScheme)] deriving (Monoid, Show)
 
 --Should have a better Eq instance!!!
 data Substitution = Substitution [(TVarId, Type)] deriving (Show, Eq)
