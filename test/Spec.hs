@@ -66,13 +66,23 @@ test_mgu = [
         t2 = (TArrow [TInt, TBool] TVoid)
 
 
-test_type_inference =
-    [testCase "Int list cannot unify with bool" test1
-    ,testCase "Int list infers correctly" test2] where
+var :: Identifier -> Type
+var id = TVar (NamedTV id)
+
+test_type_inference = [
+     testCase "Int list cannot unify with bool" test1
+    ,testCase "Int list infers correctly" test2
+    ,testCase "Add Int to Polymorphic" test3
+    ] where
     test1 = (infer (typeInferExp e mempty a)) @?= Nothing where
         e = Op2E Cons (IntE 1) NilE
         a = TBool
     test2 = subst s a @?= TList TInt where
         s = fromJust (infer (typeInferExp e mempty a))
         e = Op2E Cons (IntE 1) NilE
-        a = (TVar (NamedTV "a"))
+        a = var "a"
+    test3 = subst s a @?= TInt where
+        s = fromJust (infer (typeInferExp e c a))
+        e = Op2E Plus (Var "x" []) (IntE 4)
+        c = TypeContext [("x", TypeScheme [] (var "a"))]
+        a = var "b"
