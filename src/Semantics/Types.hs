@@ -371,9 +371,9 @@ typeInferAst (AST (FunD (FunDecl id args _ vds ss):ds)) t = do
     s1 <- typeInferVarDeclList vds retType
                 >>= typeInferStmtList' ss retType
     s2 <- lift $ mgu' funType (TArrow vs retType) s1
+    popCtx
     ctx <- getCtx
     let freeTVars = vars (subst s2 funType) \\ ctxVars (subst s2 ctx)
-    popCtx
     ctxAdd (id, TypeScheme (toList freeTVars) (subst s2 funType))
     typeInferAst' (AST ds) t s2
 
