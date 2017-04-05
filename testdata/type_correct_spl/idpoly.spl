@@ -1,0 +1,7 @@
+id (x) {return x;}
+
+test () {
+    var a = id(4);
+    var b = id(True);
+    return;
+}
