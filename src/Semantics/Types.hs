@@ -37,6 +37,7 @@ setRets rs [] = error "Return status stack empty"
 setRets rs (l:ls) = rs:ls
 
 data InfState = InfState {
+    ctx :: [TypeContext],
     freshNum :: Int,
     rets :: [Bool]
     } deriving (Show)
@@ -45,7 +46,7 @@ type Inference a = StateT InfState Maybe a
 
 infer :: Inference a -> Maybe a
 infer a = evalStateT a
-    (InfState {freshNum = 0, rets = [False]})
+    (InfState {freshNum = 0, rets = [False], ctx = [mempty]})
 
 freshVar :: Inference Type
 freshVar = do
@@ -75,6 +76,36 @@ leaveControl i b = do
     let status = b && all id subRets
     put (state {rets = (status || h):t})
 
+ctxLookup :: String -> Inference TypeScheme
+ctxLookup id = do
+    state <- get
+    let (TypeContext c) = head $ ctx state
+    lift $ lookup id c
+
+ctxAdd :: (String, TypeScheme) -> Inference ()
+ctxAdd b = do
+    state <- get
+    let h = head $ ctx state
+    let t = tail $ ctx state
+    put (state {ctx = (h `with` b):t})
+
+pushCtx :: Inference ()
+pushCtx = do
+    state <- get
+    let c = ctx state
+    put (state {ctx = (head c):c})
+
+popCtx :: Inference ()
+popCtx = do
+    state <- get
+    let c = ctx state
+    put (state {ctx = tail c})
+
+getCtx :: Inference TypeContext
+getCtx = do
+    state <- get
+    pure (head $ ctx state)
+
 data TypeScheme = TypeScheme [TVarId] Type deriving (Show)
 
 newtype TypeContext = TypeContext [(Identifier,TypeScheme)] deriving (Monoid, Show)
@@ -100,14 +131,20 @@ instance Substable TypeScheme where
 instance Substable Substitution where
     subst s1 s2 = s1 <> s2
 
-instance (Substable a, Functor m) => Substable (StateT s m a) where
-    subst s = fmap (subst s)
+instance (Substable a, Substable s, Functor m) => Substable (StateT s m a) where
+    subst s = fmap (subst s) . withStateT (subst s)
 
 instance (Substable a) => Substable (Maybe a) where
     subst s = fmap (subst s)
 
 instance (Substable a, Substable b) => Substable (a -> b) where
     subst s f = \a -> subst s (f (subst s a))
+
+instance Substable InfState where
+    subst s state = state {ctx = (subst s h):t} where
+        h = head $ ctx state
+        t = tail $ ctx state
+
 
 
 --When composing substitutions the resulting list will have overwritten
@@ -133,6 +170,12 @@ vars (TList t) = vars t
 vars (TArrow ts t) = (unions $ fmap vars ts) `union` (vars t)
 vars (TVar a) = singleton a
 vars t = empty
+
+ctxVars ::  TypeContext -> Set.Set TVarId
+ctxVars (TypeContext []) = empty
+ctxVars (TypeContext ((id, TypeScheme bounds t):rest)) =
+        (vars t \\ fromList bounds)
+        `union` ctxVars (TypeContext rest)
 
 mgu' t1 t2 s = subst s mgu t1 t2
 
@@ -191,94 +234,142 @@ opOutType And = TBool
 opOutType Or = TBool
 opOutType Cons = undefined
 
-typeInferExp' e ctx t s = subst s (typeInferExp e) ctx t
+typeInferExp' e t s = subst s (typeInferExp e) t
 
-typeInferExp :: ASTExp -> TypeContext -> Type -> Inference Substitution
-typeInferExp (IntE _) ctx t = lift $ mgu t TInt
-typeInferExp (BoolE _) ctx t = lift $ mgu t TBool
-typeInferExp (CharE _) ctx t = lift $ mgu t TChar
-typeInferExp NilE ctx t =
+typeInferExp :: ASTExp -> Type -> Inference Substitution
+typeInferExp (IntE _) t = lift $ mgu t TInt
+typeInferExp (BoolE _) t = lift $ mgu t TBool
+typeInferExp (CharE _) t = lift $ mgu t TChar
+typeInferExp NilE t =
     freshVar >>= \a ->
     lift (mgu t (TList a))
-typeInferExp (Op2E Cons e1 e2) ctx t =
+typeInferExp (Op2E Cons e1 e2) t =
     freshVar >>= \a ->
-    typeInferExp  e1 ctx a >>=
-    typeInferExp' e2 ctx (TList a) >>=
+    typeInferExp  e1 a >>=
+    typeInferExp' e2 (TList a) >>=
     lift . (mgu' t (TList a))
-typeInferExp (Op2E o e1 e2) ctx t =
-    typeInferExp  e1 ctx (opInType o) >>=
-    typeInferExp' e2 ctx (opInType o) >>=
+typeInferExp (Op2E o e1 e2) t =
+    typeInferExp  e1 (opInType o) >>=
+    typeInferExp' e2 (opInType o) >>=
     lift . (mgu' t (opOutType o))
-typeInferExp (Op1E Neg e) ctx t =
-    typeInferExp e ctx t >>=
+typeInferExp (Op1E Neg e) t =
+    typeInferExp e t >>=
     lift . (mgu' t TInt)
-typeInferExp (Op1E Not e) ctx t =
-    typeInferExp e ctx TBool >>=
+typeInferExp (Op1E Not e) t =
+    typeInferExp e TBool >>=
     lift . (mgu' t TBool)
-typeInferExp (PairE e1 e2) ctx t =
+typeInferExp (PairE e1 e2) t =
     freshVar >>= \a ->
     freshVar >>= \b ->
-    typeInferExp e1 ctx a >>=
-    typeInferExp' e2 ctx b >>=
+    typeInferExp e1 a >>=
+    typeInferExp' e2 b >>=
     lift . (mgu' t (TPair a b))
-typeInferExp (FunCallE id es) ctx t = do
+typeInferExp (FunCallE id es) t = do
     vs <- replicateM (length es) freshVar
-    s <- typeInferExp (Var id []) ctx (TArrow vs t)
-    foldM (flip $ \(e, a) -> typeInferExp' e ctx a) s (zip es vs)
+    s <- typeInferExp (Var id []) (TArrow vs t)
+    foldM (flip $ \(e, a) -> typeInferExp' e a) s (zip es vs)
 --TODO: handle cases with field access should be easy. Like built in
 -- functions.
-typeInferExp (Var id []) (TypeContext ctx) t = do
-    schm@(TypeScheme bounds _) <- lift $ lookup id ctx
+typeInferExp (Var id []) t = do
+    schm@(TypeScheme bounds _) <- ctxLookup id
     vs <- replicateM (length bounds) freshVar
     lift $ mgu (concrete schm vs) t
 
-typeInferStmtList' ss ctx t s =
-    subst s (typeInferStmtList ss) ctx t
+typeInferStmtList' ss t s =
+    subst s (typeInferStmtList ss) t
 
 typeInferStmtList ::
            [ASTStmt]
-        -> TypeContext
         -> Type
         -> Inference Substitution
-typeInferStmtList [] _ t = do
+typeInferStmtList [] t = do
     b <- implicitReturnNeeded
     if b then
         lift $ mgu t TVoid
     else
         pure mempty
 --This case is basicaly let binding with value restriction
-typeInferStmtList ((AssignS id fs e):ss) ctx t =
+--TODO: This should actually look the variable up in the context,
+--and make sure the type of the expression unifies with it, no??
+typeInferStmtList ((AssignS id fs e):ss) t =
     freshVar >>= \a ->
-    typeInferExp e (ctx `with` (id, TypeScheme [] a)) a >>=
-    typeInferStmtList' ss (ctx `with` (id, TypeScheme [] a)) t
-typeInferStmtList (ReturnS (Just e):ss) ctx t =
+    ctxAdd (id, TypeScheme [] a) >>
+    typeInferExp e a >>=
+    typeInferStmtList' ss t
+typeInferStmtList (ReturnS (Just e):ss) t =
     returnFound >>
-    typeInferExp e ctx t >>=
-    typeInferStmtList' ss ctx t
-typeInferStmtList (ReturnS Nothing:ss) ctx t =
+    typeInferExp e t >>=
+    typeInferStmtList' ss t
+typeInferStmtList (ReturnS Nothing:ss) t =
     returnFound >>
     lift (mgu t TVoid) >>=
-    typeInferStmtList' ss ctx t
-typeInferStmtList (WhileS e body:ss) ctx t = do
-    s1 <- typeInferExp e ctx TBool
+    typeInferStmtList' ss t
+typeInferStmtList (WhileS e body:ss) t = do
+    s1 <- typeInferExp e TBool
     enterControl
-    s2 <- typeInferStmtList' body ctx t s1
+    pushCtx
+    s2 <- typeInferStmtList' body t s1
+    popCtx
     leaveControl 1 False
-    typeInferStmtList' ss ctx t s2
-typeInferStmtList (IfS e body Nothing:ss) ctx t = do
-    s1 <- typeInferExp e ctx TBool
+    typeInferStmtList' ss t s2
+typeInferStmtList (IfS e body Nothing:ss) t = do
+    s1 <- typeInferExp e TBool
     enterControl
-    s2 <- typeInferStmtList' body ctx t s1
+    pushCtx
+    s2 <- typeInferStmtList' body t s1
+    popCtx
     leaveControl 1 False
-    typeInferStmtList' ss ctx t s2
-typeInferStmtList (IfS e body1 (Just body2):ss) ctx t = do
-    s1 <- typeInferExp e ctx TBool
+    typeInferStmtList' ss t s2
+typeInferStmtList (IfS e body1 (Just body2):ss) t = do
+    s1 <- typeInferExp e TBool
     enterControl
-    s2 <- typeInferStmtList' body1 ctx t s1
+    pushCtx
+    s2 <- typeInferStmtList' body1 t s1
+    popCtx
     enterControl
-    s3 <- typeInferStmtList' body2 ctx t s2
+    pushCtx
+    s3 <- typeInferStmtList' body2 t s2
+    popCtx
     leaveControl 2 True
-    typeInferStmtList' ss ctx t s3
+    typeInferStmtList' ss t s3
+
+typeInferVarDeclList' ds t s =
+    subst s (typeInferVarDeclList ds) t
+
+typeInferVarDeclList :: [ASTVarDecl] -> Type -> Inference Substitution
+typeInferVarDeclList [] t = pure mempty
+typeInferVarDeclList ((VarDecl _ id e):ds) t =
+    freshVar >>= \a ->
+    ctxAdd (id, TypeScheme [] a) >>
+    typeInferExp e a >>=
+    typeInferVarDeclList' ds t
+
+typeInferAst' ds t s = subst s (typeInferAst ds) t
+
+typeInferAst :: AST -> Type -> Inference Substitution
+typeInferAst (AST []) t = pure mempty
+typeInferAst (AST (VarD (VarDecl _ id e):ds)) t =
+    freshVar >>= \a ->
+    ctxAdd (id, TypeScheme [] a) >>
+    typeInferExp e a >>=
+    typeInferAst' (AST ds) t
+--This is the only place we have the let binding without value
+--restriction
+typeInferAst (AST (FunD (FunDecl id args _ vds ss):ds)) t = do
+    vs <- replicateM (length args) freshVar
+    retType  <- freshVar
+    funType<- freshVar
+    pushCtx
+    ctxAdd (id, TypeScheme [] funType)
+    mapM (\(arg, v) -> ctxAdd (arg, TypeScheme [] v)) (zip args vs)
+    s1 <- typeInferVarDeclList vds retType
+                >>= typeInferStmtList' ss retType
+    s2 <- lift $ mgu' funType (TArrow vs retType) s1
+    ctx <- getCtx
+    let freeTVars = vars (subst s2 funType) \\ ctxVars (subst s2 ctx)
+    popCtx
+    ctxAdd (id, TypeScheme (toList freeTVars) (subst s2 funType))
+    typeInferAst' (AST ds) t s2
 
 --typeInferStmt :: ASTStmt -> TypeContext -> Type -> Inference Substitution
 --typeInferStmt (IfS

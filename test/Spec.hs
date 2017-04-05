@@ -2,6 +2,7 @@ module Spec where
 
 import System.Directory
 import System.FilePath
+import System.IO
 
 import Test.Tasty
 import Test.Tasty.SmallCheck as SC
@@ -34,6 +35,25 @@ test_ppp_on_syntactically_correct_programs = do
     fileNames <- listDirectory dir
     let cases = fmap (dir </>) fileNames
     pure $ fmap (\s -> testCase s (pppTestFile s)) cases
+
+typeCheckFile f = do
+    prgrm <- readFile f
+    let ast = parseSpl prgrm
+    case ast of
+        Left e -> assertFailure (show e)
+        Right a -> do
+                let s = infer (typeInferAst a (TVar (NamedTV "?")))
+                if s == Nothing then
+                    assertFailure "Did not type check"
+                else
+                    pure  ()
+
+test_type_correct_programs :: IO [TestTree]
+test_type_correct_programs = do
+    let dir = "testdata/type_correct_spl"
+    fileNames <- listDirectory dir
+    let cases = fmap (dir </>) fileNames
+    pure $ fmap (\s -> testCase s (typeCheckFile s)) cases
 
 test_mgu = [
         testCase "Pair successfull unification" test1,
@@ -74,15 +94,15 @@ test_type_inference = [
     ,testCase "Int list infers correctly" test2
     ,testCase "Add Int to Polymorphic" test3
     ] where
-    test1 = (infer (typeInferExp e mempty a)) @?= Nothing where
+    test1 = (infer (typeInferExp e a)) @?= Nothing where
         e = Op2E Cons (IntE 1) NilE
         a = TBool
     test2 = subst s a @?= TList TInt where
-        s = fromJust (infer (typeInferExp e mempty a))
+        s = fromJust (infer (typeInferExp e a))
         e = Op2E Cons (IntE 1) NilE
         a = var "a"
     test3 = subst s a @?= TInt where
-        s = fromJust (infer (typeInferExp e c a))
+        s = fromJust (infer (typeInferExp e a))
         e = Op2E Plus (Var "x" []) (IntE 4)
         c = TypeContext [("x", TypeScheme [] (var "a"))]
         a = var "b"
