@@ -42,9 +42,15 @@ data InfState = InfState {
     rets :: [Bool]
     } deriving (Show)
 
-type Inference a = StateT InfState Maybe a
+data TypeError = NoUnify Type Type | NotInContext Identifier deriving (Show)
 
-infer :: Inference a -> Maybe a
+type Inference a = StateT InfState (Either TypeError) a
+
+maybeToEither :: e -> Maybe a -> Either e a
+maybeToEither e (Just a) = Right a
+maybeToEither e Nothing = Left e
+
+infer :: Inference a -> Either TypeError a
 infer a = evalStateT a
     (InfState {freshNum = 0, rets = [False], ctx = [mempty]})
 
@@ -80,7 +86,7 @@ ctxLookup :: String -> Inference TypeScheme
 ctxLookup id = do
     state <- get
     let (TypeContext c) = head $ ctx state
-    lift $ lookup id c
+    lift $ maybeToEither (NotInContext id) (lookup id c)
 
 ctxAdd :: (String, TypeScheme) -> Inference ()
 ctxAdd b = do
@@ -134,7 +140,7 @@ instance Substable Substitution where
 instance (Substable a, Substable s, Functor m) => Substable (StateT s m a) where
     subst s = fmap (subst s) . withStateT (subst s)
 
-instance (Substable a) => Substable (Maybe a) where
+instance (Substable a) => Substable (Either e a) where
     subst s = fmap (subst s)
 
 instance (Substable a, Substable b) => Substable (a -> b) where
@@ -179,16 +185,16 @@ ctxVars (TypeContext ((id, TypeScheme bounds t):rest)) =
 
 mgu' t1 t2 s = subst s mgu t1 t2
 
-mgu :: Type -> Type -> Maybe Substitution
+mgu :: Type -> Type -> Either TypeError  Substitution
 mgu (TVar id1) (TVar id2)
-    | id1 == id2 = Just mempty
-    | otherwise = Just (Substitution [(id1, (TVar id2))])
+    | id1 == id2 = Right mempty
+    | otherwise = Right (Substitution [(id1, (TVar id2))])
 mgu (TVar id) t
-    | notMember id (vars t) = Just (Substitution [(id, t)])
-    | otherwise = Nothing
+    | notMember id (vars t) = Right (Substitution [(id, t)])
+    | otherwise = Left (NoUnify (TVar id) t)
 mgu t (TVar id)
-    | notMember id (vars t) = Just (Substitution [(id, t)])
-    | otherwise = Nothing
+    | notMember id (vars t) = Right (Substitution [(id, t)])
+    | otherwise = Left (NoUnify t (TVar id))
 mgu (TList t) (TList s) = mgu t s
 mgu (TPair t1 t2) (TPair u1 u2) =
     mgu t1 u1 >>=
@@ -196,13 +202,13 @@ mgu (TPair t1 t2) (TPair u1 u2) =
 mgu (TArrow ts t) (TArrow us u) =
     mgu_aux mempty ts us >>=
     mgu' t u where
-        mgu_aux s [] [] = Just s
+        mgu_aux s [] [] = Right s
         mgu_aux s (t1:t2) (u1:u2) = do
             s' <- mgu (subst s t1) (subst s u1)
             mgu_aux (s <> s') t2 u2
 mgu t1 t2
-    | t1 == t2 = Just mempty
-    | otherwise = Nothing
+    | t1 == t2 = Right mempty
+    | otherwise = Left (NoUnify t1 t2)
 
 opInType Plus = TInt
 opInType Minus = TInt
