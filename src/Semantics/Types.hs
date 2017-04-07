@@ -294,14 +294,11 @@ typeInferStmtList [] t = do
         lift $ mgu t TVoid
     else
         pure mempty
---This case is basicaly let binding with value restriction
---TODO: This should actually look the variable up in the context,
---and make sure the type of the expression unifies with it, no??
-typeInferStmtList ((AssignS id fs e):ss) t =
-    freshVar >>= \a ->
-    ctxAdd (id, TypeScheme [] a) >>
-    typeInferExp e a >>=
-    typeInferStmtList' ss t
+typeInferStmtList ((AssignS id fs e):ss) t = do
+    schm@(TypeScheme bounds _) <- ctxLookup id
+    vs <- replicateM (length bounds) freshVar
+    s <- typeInferExp e (concrete schm vs)
+    typeInferStmtList' ss t s
 typeInferStmtList (ReturnS (Just e):ss) t =
     returnFound >>
     typeInferExp e t >>=
