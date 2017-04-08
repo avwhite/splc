@@ -1,0 +1,8 @@
+singletonInt(x) :: Int -> [Int] {
+    return x:[];
+}
+
+main() {
+    var b = singletonInt(True);
+    return;
+}

@@ -54,6 +54,24 @@ test_type_correct_programs = do
     let cases = fmap (dir </>) fileNames
     pure $ fmap (\s -> testCase s (typeCheckFile s)) cases
 
+typeCheckErrorFile f = do
+    prgrm <- readFile f
+    let ast = parseSpl prgrm
+    case ast of
+        Left e -> assertFailure (show e)
+        Right a -> do
+                let s = infer (typeInferAst a (TVar (NamedTV "?")))
+                case s of
+                    Left e -> pure ()
+                    Right _ -> assertFailure "Program type checks"
+
+test_type_incorrect_programs :: IO [TestTree]
+test_type_incorrect_programs = do
+    let dir = "testdata/type_incorrect_spl"
+    fileNames <- listDirectory dir
+    let cases = fmap (dir </>) fileNames
+    pure $ fmap (\s -> testCase s (typeCheckErrorFile s)) cases
+
 --test_mgu = [
 --        testCase "Pair successfull unification" test1,
 --        testCase "Pair unsuccessfull unification" test2,

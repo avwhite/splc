@@ -8,6 +8,8 @@ import System.Environment
 import Parser.Scanner
 import Parser.AST
 
+import Semantics.Types
+
 import Data.List.NonEmpty
 
 scanParse p str = 
@@ -22,9 +24,8 @@ scanParse p str =
 testProgram f = do
     s <- readFile f
     let ast = scanParse splp s
-    let prgm = prettyPrint ast
-    let ast2 = scanParse splp prgm
-    putStrLn (show (ast == ast2))
+    let a = infer $ typeInferAst ast (TVar (NamedTV "a"))
+    putStrLn (show a)
 
 parseStr p str = 
     case scan str of 

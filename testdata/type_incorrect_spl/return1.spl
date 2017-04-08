@@ -1,0 +1,9 @@
+doesnotreturn() {
+    var hej = 3;
+    if (True) {
+     
+    } else {
+        hej = hej + 2;
+        return 5;
+    }
+}
