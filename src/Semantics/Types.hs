@@ -164,6 +164,23 @@ infixr 6 <>
 (<>) :: (Monoid a) => a -> a -> a
 (<>) = mappend
 
+synTypeToType :: ASTType -> Type
+synTypeToType BoolT = TBool
+synTypeToType IntT = TInt
+synTypeToType CharT = TChar
+synTypeToType (PairT t1 t2) =
+    TPair (synTypeToType t1) (synTypeToType t2)
+synTypeToType (ListT t) = TList (synTypeToType t)
+synTypeToType (PolyT id) = TVar (NamedTV id)
+
+synRetTypeToType :: ASTReturnType -> Type
+synRetTypeToType Void = TVoid
+synRetTypeToType (ReturnType t) = synTypeToType t
+
+synFunTypeToType :: ASTFunType -> Type
+synFunTypeToType (FunType argts rett) =
+    TArrow (fmap synTypeToType argts) (synRetTypeToType rett)
+
 concrete :: TypeScheme -> [Type] -> Type
 concrete (TypeScheme vars t) ts = subst (Substitution (zip vars ts)) t
 
@@ -280,6 +297,10 @@ typeInferExp (Var id []) t = do
     schm@(TypeScheme bounds _) <- ctxLookup id
     vs <- replicateM (length bounds) freshVar
     lift $ mgu (concrete schm vs) t
+typeInferExp (Var id fields) t = do
+    schm@(TypeScheme bounds _) <- ctxLookup id
+    vs <- replicateM (length bounds) freshVar
+    lift $ mgu (concrete schm vs) t
 
 typeInferStmtList' ss t s =
     subst s (typeInferStmtList ss) t
@@ -358,7 +379,7 @@ typeInferAst (AST (VarD (VarDecl _ id e):ds)) t =
     typeInferAst' (AST ds) t
 --This is the only place we have the let binding without value
 --restriction
-typeInferAst (AST (FunD (FunDecl id args _ vds ss):ds)) t = do
+typeInferAst (AST (FunD (FunDecl id args Nothing vds ss):ds)) t = do
     vs <- replicateM (length args) freshVar
     retType  <- freshVar
     funType<- freshVar
@@ -373,7 +394,18 @@ typeInferAst (AST (FunD (FunDecl id args _ vds ss):ds)) t = do
     let freeTVars = vars (subst s2 funType) \\ ctxVars (subst s2 ctx)
     ctxAdd (id, TypeScheme (toList freeTVars) (subst s2 funType))
     typeInferAst' (AST ds) t s2
-
+typeInferAst (AST (FunD (FunDecl id args (Just anno) vds ss):ds)) t = do
+    let funType@(TArrow targs retType) = synFunTypeToType anno
+    pushCtx
+    ctxAdd (id, TypeScheme (toList $ vars funType) funType)
+    mapM (\(arg, v) -> ctxAdd (arg, TypeScheme [] v)) (zip args targs)
+    s <- typeInferVarDeclList vds retType
+                >>= typeInferStmtList' ss retType
+    popCtx
+    ctx <- getCtx
+    let freeTVars = vars (subst s funType) \\ ctxVars (subst s ctx)
+    ctxAdd (id, TypeScheme (toList freeTVars) (subst s funType))
+    typeInferAst' (AST ds) t s
 --typeInferStmt :: ASTStmt -> TypeContext -> Type -> Inference Substitution
 --typeInferStmt (IfS
 
