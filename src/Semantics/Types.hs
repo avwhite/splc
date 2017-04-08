@@ -362,20 +362,28 @@ typeInferVarDeclList' ds t s =
 
 typeInferVarDeclList :: [ASTVarDecl] -> Type -> Inference Substitution
 typeInferVarDeclList [] t = pure mempty
-typeInferVarDeclList ((VarDecl _ id e):ds) t =
+typeInferVarDeclList ((VarDecl Nothing id e):ds) t =
     freshVar >>= \a ->
     ctxAdd (id, TypeScheme [] a) >>
     typeInferExp e a >>=
+    typeInferVarDeclList' ds t
+typeInferVarDeclList ((VarDecl (Just anno) id e):ds) t =
+    ctxAdd (id, TypeScheme [] (synTypeToType anno)) >>
+    typeInferExp e (synTypeToType anno) >>=
     typeInferVarDeclList' ds t
 
 typeInferAst' ds t s = subst s (typeInferAst ds) t
 
 typeInferAst :: AST -> Type -> Inference Substitution
 typeInferAst (AST []) t = pure mempty
-typeInferAst (AST (VarD (VarDecl _ id e):ds)) t =
+typeInferAst (AST (VarD (VarDecl Nothing id e):ds)) t =
     freshVar >>= \a ->
     ctxAdd (id, TypeScheme [] a) >>
     typeInferExp e a >>=
+    typeInferAst' (AST ds) t
+typeInferAst (AST (VarD (VarDecl (Just anno) id e):ds)) t =
+    ctxAdd (id, TypeScheme [] (synTypeToType anno)) >>
+    typeInferExp e (synTypeToType anno) >>=
     typeInferAst' (AST ds) t
 --This is the only place we have the let binding without value
 --restriction
@@ -396,15 +404,15 @@ typeInferAst (AST (FunD (FunDecl id args Nothing vds ss):ds)) t = do
     typeInferAst' (AST ds) t s2
 typeInferAst (AST (FunD (FunDecl id args (Just anno) vds ss):ds)) t = do
     let funType@(TArrow targs retType) = synFunTypeToType anno
+    ctx <- getCtx
+    let freeTVars = vars funType \\ ctxVars ctx
+    ctxAdd (id, TypeScheme (toList freeTVars) funType)
     pushCtx
-    ctxAdd (id, TypeScheme (toList $ vars funType) funType)
+    --ctxAdd (id, TypeScheme (toList $ vars funType) funType)
     mapM (\(arg, v) -> ctxAdd (arg, TypeScheme [] v)) (zip args targs)
     s <- typeInferVarDeclList vds retType
                 >>= typeInferStmtList' ss retType
     popCtx
-    ctx <- getCtx
-    let freeTVars = vars (subst s funType) \\ ctxVars (subst s ctx)
-    ctxAdd (id, TypeScheme (toList freeTVars) (subst s funType))
     typeInferAst' (AST ds) t s
 --typeInferStmt :: ASTStmt -> TypeContext -> Type -> Inference Substitution
 --typeInferStmt (IfS
