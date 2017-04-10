@@ -291,16 +291,29 @@ typeInferExp (FunCallE id es) t = do
     vs <- replicateM (length es) freshVar
     s <- typeInferExp (Var id []) (TArrow vs t)
     foldM (flip $ \(e, a) -> typeInferExp' e a) s (zip es vs)
---TODO: handle cases with field access should be easy. Like built in
--- functions.
 typeInferExp (Var id []) t = do
     schm@(TypeScheme bounds _) <- ctxLookup id
     vs <- replicateM (length bounds) freshVar
     lift $ mgu (concrete schm vs) t
 typeInferExp (Var id fields) t = do
-    schm@(TypeScheme bounds _) <- ctxLookup id
-    vs <- replicateM (length bounds) freshVar
-    lift $ mgu (concrete schm vs) t
+    let field = last fields
+    let r = init fields
+    case field of
+        Hd -> do
+            a <- freshVar
+            typeInferExp (Var id r) (TList a) >>= lift . (mgu' t a)
+        Tl -> do
+            a <- freshVar
+            typeInferExp (Var id r) (TList a)
+                >>= lift . (mgu' t (TList a))
+        Fst -> do
+            a <- freshVar
+            b <- freshVar
+            typeInferExp (Var id r) (TPair a b) >>= lift . (mgu' t a)
+        Snd  -> do
+            a <- freshVar
+            b <- freshVar
+            typeInferExp (Var id r) (TPair a b) >>= lift . (mgu' t b)
 
 typeInferStmtList' ss t s =
     subst s (typeInferStmtList ss) t
