@@ -7,9 +7,12 @@ import Control.Monad.State
 import Data.Traversable
 import Data.Maybe
 
-data Instr = Add | Mul | Ldc Integer | Label String | Bsr String
+data Instr = Halt | Ldc Integer | Label String | Bsr String
     | Bra String | Link Integer | Unlink | Ret | Stl Integer
-    | StrRR | LdrRR | Ajs Integer deriving (Show)
+    | StrRR | LdrRR | Ajs Integer
+    | Add | Mul | Sub | DivI | ModI | AndI | OrI
+    | Eq | Ne | Lt | Gt | Le | Ge
+    | Neg | Not deriving (Show)
 
 data VarCtx = VarCtx [(Identifier, Integer)]
 
@@ -24,17 +27,26 @@ lookupVar id = do
 genCode :: Codegen [Instr] -> [Instr]
 genCode cg = evalState cg (VarCtx [])
 
+opToInstr Plus = Add
+opToInstr Minus = Sub
+opToInstr Times = Mul
+opToInstr Div = DivI
+opToInstr Mod = ModI
+opToInstr And = AndI
+opToInstr Or = OrI
+opToInstr Equal = Eq
+opToInstr NotEq = Ne
+opToInstr Less = Lt
+opToInstr Greater = Gt
+opToInstr LessEq = Le
+opToInstr GreaterEq = Ge
+
 codeGenExp :: ASTExp -> Codegen [Instr]
 codeGenExp (IntE i) = pure [Ldc i]
-codeGenExp (Op2E Plus e1 e2) = fmap mconcat $ sequence
+codeGenExp (Op2E op e1 e2) = fmap mconcat $ sequence
     [ codeGenExp e1
     , codeGenExp e2
-    , pure [Add]
-    ]
-codeGenExp (Op2E Times e1 e2) = fmap mconcat $ sequence
-    [ codeGenExp e1
-    , codeGenExp e2
-    , pure [Mul]
+    , pure [opToInstr op]
     ]
 
 codeGenStmt _ (AssignS id [] e) = do
@@ -44,7 +56,7 @@ codeGenStmt _ (AssignS id [] e) = do
     pure (exprCode ++ [Stl location])
 codeGenStmt _ (FunCallS id args) = do
     argCode <- fmap mconcat $ sequence (fmap codeGenExp args)
-    pure (argCode ++ [Bsr id, Ajs (toInteger (-(length args))),LdrRR])
+    pure (argCode ++ [Bsr id, Ajs (toInteger (-(length args)))])
 codeGenStmt retLabel (ReturnS (Just e)) = fmap mconcat $ sequence
     [ codeGenExp e
     , pure [StrRR, Bra retLabel]
@@ -65,7 +77,7 @@ codeGenFunDecl (FunDecl id args _ decls body) = do
     space <- handleDecls decls
     prologue <- pure [Label id, Link space]
     init <- pure [] --codeGenVarDecls decls
-    let retLabel = id ++ "$return"
+    let retLabel = id ++ "XZXreturn"
     main  <- fmap mconcat $ sequence (fmap (codeGenStmt retLabel) body)
     epilouge <- pure [Label retLabel, Unlink, Ret]
     put ctx -- restore context
@@ -78,9 +90,14 @@ codeGenFunDecl (FunDecl id args _ decls body) = do
     --Evaluate expression and assign var. (requires code)
 
 codeGen :: AST -> Codegen [Instr]
-codeGen (AST (FunD f:rs)) = do
+codeGen ast = do
+    c <- codeGen' ast
+    pure ((Bsr "main"):Halt:c)
+
+codeGen' :: AST -> Codegen [Instr]
+codeGen' (AST (FunD f:rs)) = do
     funCode  <- codeGenFunDecl f
-    restCode <- codeGen (AST rs)
+    restCode <- codeGen' (AST rs)
     pure (funCode ++ restCode)
-codeGen (AST (VarD _:rs)) = codeGen (AST rs) --ignore global variables for now
-codeGen (AST []) = pure []
+codeGen' (AST (VarD _:rs)) = codeGen' (AST rs) --ignore global variables for now
+codeGen' (AST []) = pure []

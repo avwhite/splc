@@ -1,6 +1,11 @@
+hej2(y) {
+    return 11;
+}
 hej(x) {
-    var y = 5;
-    var hejsa = True;
+    hej2(5);
+    return 2+5*100%17;
+}
+main() {
     hej(5);
-    return 2;
+    hej2(2);
 }

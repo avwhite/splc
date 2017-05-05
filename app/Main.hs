@@ -46,8 +46,12 @@ compiler = do
     p <- readFile file
     case parseSpl p of
         (Right ast) -> do
-            let code = genCode (codeGen ast)
-            writeInstr code
+            case infer $ typeInferAst ast (TVar (NamedTV "a")) of
+                (Right _) -> do
+                    let code = genCode (codeGen ast)
+                    writeInstr code
+                (Left e) -> do
+                    putStrLn (show e)
         (Left e) -> putStrLn e
 
 main :: IO ()
