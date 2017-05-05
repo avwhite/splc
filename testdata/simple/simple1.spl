@@ -2,8 +2,9 @@ hej2(y) {
     return 11;
 }
 hej(x) {
+    var y = 19;
     hej2(5);
-    return 2+5*100%17;
+    return 2+5*x%17+y;
 }
 main() {
     hej(5);

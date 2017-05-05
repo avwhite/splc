@@ -18,6 +18,7 @@ instrToString Le = "le"
 instrToString Ge = "ge"
 instrToString Halt = "halt"
 instrToString (Ldc i) = "ldc " ++ show i
+instrToString (Ldl i) = "ldl " ++ show i
 instrToString (Label id) = id ++ ":"
 instrToString (Bsr id) = "bsr " ++ id
 instrToString (Bra id) = "bra " ++ id
