@@ -1,0 +1,6 @@
+hej(x) {
+    var y = 5;
+    var hejsa = True;
+    hej(5);
+    return 2;
+}

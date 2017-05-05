@@ -7,8 +7,12 @@ import Parser.Output
 import System.Environment
 import Parser.Scanner
 import Parser.AST
+import Parser
 
 import Semantics.Types
+
+import Codegen.Codegen
+import Codegen.CodeWrite
 
 import Data.List.NonEmpty
 
@@ -37,5 +41,14 @@ parseStr p str =
 
 parseFile p f = readFile f >>= parseStr p
 
+compiler = do
+    [file] <- getArgs
+    p <- readFile file
+    case parseSpl p of
+        (Right ast) -> do
+            let code = genCode (codeGen ast)
+            writeInstr code
+        (Left e) -> putStrLn e
+
 main :: IO ()
-main = putStrLn "Not doing anything yet. Run inside REPL to test stuff"
+main = compiler
