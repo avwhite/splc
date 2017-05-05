@@ -223,6 +223,7 @@ mgu (TArrow ts t) (TArrow us u) =
         mgu_aux s (t1:t2) (u1:u2) = do
             s' <- mgu (subst s t1) (subst s u1)
             mgu_aux (s <> s') t2 u2
+        mgu_aux s _ _ = Left (NoUnify (TArrow ts t) (TArrow us u))
 mgu t1 t2
     | t1 == t2 = Right mempty
     | otherwise = Left (NoUnify t1 t2)
@@ -333,6 +334,11 @@ typeInferStmtList ((AssignS id fs e):ss) t = do
     vs <- replicateM (length bounds) freshVar
     s <- typeInferExp e (concrete schm vs)
     typeInferStmtList' ss t s
+typeInferStmtList (FunCallS id es:ss) t = do
+    vs <- replicateM (length es) freshVar
+    s <- typeInferExp (Var id []) (TArrow vs t)
+    s2 <- foldM (flip $ \(e, a) -> typeInferExp' e a) s (zip es vs)
+    typeInferStmtList' ss t s2
 typeInferStmtList (ReturnS (Just e):ss) t =
     returnFound >>
     typeInferExp e t >>=
