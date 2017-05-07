@@ -16,12 +16,15 @@ instrToString Lt = "lt"
 instrToString Gt = "gt"
 instrToString Le = "le"
 instrToString Ge = "ge"
+instrToString Neg = "neg"
+instrToString Not = "not"
 instrToString Halt = "halt"
 instrToString (Ldc i) = "ldc " ++ show i
 instrToString (Ldl i) = "ldl " ++ show i
 instrToString (Ldh i) = "ldh " ++ show i
+instrToString (Lds i) = "lds " ++ show i
 instrToString (LdrRR) = "ldr RR"
-instrToString (Label id) = id ++ ":"
+instrToString (Label id) = id ++ ": nop"
 instrToString (Bsr id) = "bsr " ++ id
 instrToString (Bra id) = "bra " ++ id
 instrToString (Brf id) = "brf " ++ id
@@ -33,6 +36,7 @@ instrToString (StrRR) = "str RR"
 instrToString (Stmh i) = "stmh " ++ show i
 instrToString (Sta i) = "sta " ++ show i
 instrToString (Ajs i) = "ajs " ++ show i
+instrToString (Trap i) = "trap " ++ show i
 
 writeInstr :: [Instr] -> IO ()
 writeInstr is = mapM_ putStrLn (fmap instrToString is)

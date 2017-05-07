@@ -52,7 +52,17 @@ maybeToEither e Nothing = Left e
 
 infer :: Inference a -> Either TypeError a
 infer a = evalStateT a
-    (InfState {freshNum = 0, rets = [False], ctx = [mempty]})
+    (InfState {freshNum = 0, rets = [False], ctx = [TypeContext
+        [("isEmpty", TypeScheme
+                [NamedTV "a"]
+                (TArrow [TList (TVar (NamedTV "a"))] TBool)
+        )
+        ,("read", TypeScheme [] (TArrow [] (TList TChar)))
+        ,("print", TypeScheme
+                [NamedTV "a"]
+                (TArrow [(TVar (NamedTV "a"))] TVoid)
+        )
+        ]]})
 
 freshVar :: Inference Type
 freshVar = do

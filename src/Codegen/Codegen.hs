@@ -6,8 +6,11 @@ import Control.Monad.State
 
 import Data.Traversable
 import Data.Maybe
+import Data.Char
 
-data Instr = Halt | Ldc Integer | Ldl Integer | Label String | Bsr String
+data Instr = Halt
+    | Ldc Integer | Ldl Integer | Lds Integer
+    | Label String | Bsr String
     | Bra String | Brf String
     | Link Integer | Unlink | Ret | Stl Integer
     | StrRR | LdrRR | Ajs Integer
@@ -57,6 +60,7 @@ op1ToInstr Parser.AST.Not = Codegen.Codegen.Not
 
 codeGenExp :: ASTExp -> Codegen [Instr]
 codeGenExp (IntE i) = pure [Ldc i]
+codeGenExp (CharE c) = pure [Ldc (toInteger (ord c))]
 codeGenExp (BoolE True) = pure [Ldc 1]
 codeGenExp (BoolE False) = pure [Ldc 0]
 codeGenExp (NilE) = pure [Ldc 0]
@@ -163,7 +167,7 @@ handleDecls [] = pure 0
 codeGenFunDecl :: ASTFunDecl -> Codegen [Instr]
 codeGenFunDecl (FunDecl id args _ decls body) = do
     --Puts locals in the context and returns amount of space needed.
-    ctx <- get
+    (ctx,_) <- get
     if length args > 0 then
         mapM_ insertCtx
                 (zip
@@ -178,7 +182,8 @@ codeGenFunDecl (FunDecl id args _ decls body) = do
     let retLabel = id ++ "XZXreturn"
     main  <- fmap mconcat $ sequence (fmap (codeGenStmt retLabel) body)
     epilouge <- pure [Label retLabel, Unlink, Ret]
-    put ctx -- restore context
+    (_,i) <- get
+    put (ctx,i)
     pure $ mconcat [prologue, init, main, epilouge]
 
 codeGenVarDecl :: ASTVarDecl -> Codegen [Instr]
@@ -191,7 +196,7 @@ codeGenVarDecl (VarDecl _ id e) = do
 codeGen :: AST -> Codegen [Instr]
 codeGen ast = do
     c <- codeGen' ast
-    pure ((Bsr "main"):Halt:c)
+    pure $ ((Bsr "main"):Halt:c) ++ isEmptyCode ++ readCode ++ stupidPrint
 
 codeGen' :: AST -> Codegen [Instr]
 codeGen' (AST (FunD f:rs)) = do
@@ -201,6 +206,33 @@ codeGen' (AST (FunD f:rs)) = do
 codeGen' (AST (VarD _:rs)) = codeGen' (AST rs) --ignore global variables for now
 codeGen' (AST []) = pure []
 
+
+isEmptyCode =
+    [ Label "isEmpty"
+    , Link 0
+    , Ldl (0-2)
+    , Ldc 0
+    , Eq
+    , StrRR
+    , Unlink
+    , Ret
+    ]
+
+readCode =
+    [ Label "read"
+    , Link 0
+    , Trap 12
+    , Ldc 0
+    , Label "readloopXZX"
+    , Stmh 2
+    , Lds (-1)
+    , Ldc 0
+    , Eq
+    , Brf "readloopXZX"
+    , StrRR
+    , Unlink
+    , Ret
+    ]
 
 stupidPrint =
     [ Label "print"
