@@ -330,9 +330,9 @@ typeInferStmtList [] t = do
     else
         pure mempty
 typeInferStmtList ((AssignS id fs e):ss) t = do
-    schm@(TypeScheme bounds _) <- ctxLookup id
-    vs <- replicateM (length bounds) freshVar
-    s <- typeInferExp e (concrete schm vs)
+    a <- freshVar
+    s <- typeInferExp (Var id fs) a
+    s1 <- typeInferExp' e a s
     typeInferStmtList' ss t s
 typeInferStmtList (FunCallS id es:ss) t = do
     vs <- replicateM (length es) freshVar
