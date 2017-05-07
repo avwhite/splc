@@ -1,0 +1,6 @@
+main () {
+    var point = (3,4);
+    point.fst = 2 + 2;
+    point.snd = point.fst + 1;
+    return point.snd;
+}

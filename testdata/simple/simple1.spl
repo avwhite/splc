@@ -2,9 +2,22 @@ hej2(y) {
     return 11;
 }
 hej(x) {
-    var y = 19;
-    hej2(5);
-    return 2+5*x%17+y;
+    var y = 3;
+    while (y != 0) {
+        hej2(5);
+        y = y - 1;
+    }
+    if (y == 0) {
+        y = 100;
+    } else {
+        y = 10;
+    }
+    if (y == 10) {
+        x = 2;
+    } else {
+        y = 99;
+    }
+    return 2+5*x+y;
 }
 main() {
     hej(5);
