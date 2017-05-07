@@ -127,6 +127,7 @@ data Token =
     | OrTok
     | ColonTok
     | NotTok
+    | CharLitTok Char
     | IntLitTok Integer
     | IdTok String
     | EofTok

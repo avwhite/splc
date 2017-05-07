@@ -17,7 +17,13 @@ eat cs = foldr (liftA2 (:)) (pure []) $ (fmap one cs) where
 tok :: String -> Token -> Parser Char Token
 tok str tok = eat str *> pure tok
 
-scanner = catMaybes <$> (eagerMany $ ((blockComment <|> lineComment) <<|> whitespace <<|> symbol <<|> intLit <<|> ident)) where
+scanner = catMaybes <$> (eagerMany $ (
+             (blockComment <|> lineComment)
+        <<|> whitespace
+        <<|> symbol
+        <<|> intLit
+        <<|> charLit
+        <<|> ident)) where
     lineComment =
            eat "//"
         *> many (match 'a' (/= '\n'))
@@ -34,6 +40,10 @@ scanner = catMaybes <$> (eagerMany $ ((blockComment <|> lineComment) <<|> whites
             <$> (match 'a' isAlpha)
             <*> ((eagerMany) $ match 'a' (\c -> isAlphaNum c || c == '_')))
     intLit = (Just . IntLitTok . read) <$> ((eager . some) $ match '0' isDigit)
+    charLit = (Just . CharLitTok) <$> (
+        eat "'"
+        *> (match 'a' isAlpha)
+        <* eat "'")
     symbol = Just <$> (
             (tok "==" EqTok)
         <<|> (tok "<=" LeTok)

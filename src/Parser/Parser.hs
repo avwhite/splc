@@ -34,6 +34,11 @@ intLitp = (\(IntLitTok i) -> i) <$> match (IntLitTok 0) idp' where
     idp' (IntLitTok _) = True
     idp' _ = False
 
+charLitp :: SPLParser Char
+charLitp = (\(CharLitTok c) -> c) <$> match (CharLitTok 'a') idp' where
+    idp' (CharLitTok _) = True
+    idp' _ = False
+
 typep :: SPLParser ASTType
 typep =
         (tok BoolTok BoolT)
@@ -97,6 +102,7 @@ expp pr = makeExpAst (assoc pr) <$> someSep' (op2p pr) (expp' pr) where
             <|> FunCallE <$> idp <*> prnth (manySep (eat CommaTok) (expp 0))
             <|> (Op1E <$> op1p <*> expp' pr) -- unary ops binds tightest
             <|> (IntE <$> intLitp)
+            <|> (CharE <$> charLitp)
             <|> (eat LParTok *> expp 0 <* eat RParTok)
             <|> (PairE <$>
                     (eat LParTok *> (expp 0 <* eat CommaTok)) 
