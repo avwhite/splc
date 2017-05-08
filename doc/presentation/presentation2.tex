@@ -1,0 +1,282 @@
+\documentclass{beamer}
+
+\usepackage{listings}
+\usepackage{syntax}
+\usepackage{amsmath}
+
+\lstset{
+  frame=none,
+  xleftmargin=2pt,
+  stepnumber=1,
+  numbers=left,
+  numbersep=5pt,
+  numberstyle=\ttfamily\tiny\color[gray]{0.3},
+  belowcaptionskip=\bigskipamount,
+  captionpos=b,
+  escapeinside={*'}{'*},
+%  language=haskell,
+  tabsize=2,
+  emphstyle={\bf},
+  commentstyle=\it,
+  stringstyle=\mdseries\rmfamily,
+  showspaces=false,
+  keywordstyle=\bfseries\rmfamily,
+  columns=flexible,
+  basicstyle=\small\sffamily,
+  showstringspaces=false,
+  morecomment=[l]\%,
+}
+\begin{document}
+
+\section{Introduction}
+
+\begin{frame}
+\frametitle{Overview}
+\begin{enumerate}
+\item Features
+\item Abstractions used.
+\item Type inference for statements (returns).
+\item What is not working.
+\end{enumerate}
+\end{frame}
+
+\section{Features}
+
+\begin{frame}
+\frametitle{Features}
+\begin{itemize}
+\item Type inference
+\item Let polymorphism
+\item Let bindings allow for recursion
+\begin{itemize}
+\item But no mutual recursion. Things can only refer to themselves and previously defined things.
+\end{itemize}
+\item Functions are required by type system to return a value.
+\begin{itemize} 
+\item Returns automatically inserted when ``missing''.
+\end{itemize}
+\end{itemize}
+\end{frame}
+
+\section{Substitution and Inference in Haskell}
+
+\begin{frame}
+\frametitle{Substitution and Inference in Haskell}
+We have to do a lot of work with substitutions and inference for this part of the compiler, so we come up with abstractions for easing this.
+\begin{itemize}
+\item A typeclass for things we can perform substitution on
+\item A monad for doing inference
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Inference Monad}
+During type inference we need to keep track of
+\begin{itemize}
+\item A context
+\item The next fresh variable
+\item Information about returns (ignore this for now)
+\end{itemize}
+
+For this we use the following monad transformer stack:
+
+\begin{lstlisting}
+data InfState = InfState {
+    ctx :: [TypeContext],
+    freshNum :: Int,
+    rets :: [Bool]
+    } deriving (Show)
+
+data TypeError = NoUnify Type Type | NotInContext Identifier deriving (Show)
+
+type Inference a = StateT InfState (Either TypeError) a
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Inference Monad}
+
+This allows us to write code like:
+\begin{lstlisting}
+typeInferExp (Op2E o e1 e2) ctx t = do
+    s1 <- typeInferExp e1 ctx (opInType o)
+    s2 <- typeInferExp e2 (subst s1 ctx) (opInType o)
+    s3 <- lift $ mgu (subst (s1 <> s2) t) (opOutType o)
+    pure (s1 <> s2 <> s3)
+\end{lstlisting}
+Note: This is from an older version where contexts where not part of the state, but passed explicitly.
+\end{frame}
+
+
+\begin{frame}[fragile]
+\frametitle{Inference Monad}
+We also have functions for dealing with the context (stack)
+
+\begin{lstlisting}
+ctxLookup :: String -> Inference TypeScheme
+ctxAdd :: (String, TypeScheme) -> Inference ()
+pushCtx :: Inference ()
+popCtx :: Inference ()
+getCtx :: Inference TypeContext
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Substitutions}
+Looking at the unification and type inference algorithms, we observe that we have to perform substitutions on many things. e.g:
+
+\[
+* = \mathcal{M} (\Gamma ^{*_1}, e_2, \sigma^{*_1}) \circ *_1
+\]
+
+Writing this in a way more like the following would be cool (maybe?):
+
+\[
+* = \mathcal{M}^{*_1}(\Gamma, e_2, \sigma)
+\]
+
+\begin{lstlisting}
+class Substable a where
+    subst :: Substitution -> a -> a
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Substitutions}
+
+Pretty much everything can be substituted. Uninteresting implementations omitted.
+
+\begin{lstlisting}
+instance Substable Type where ...
+instance Substable TypeContext where ...
+instance Substable TypeScheme where ...
+
+instance Substable Substitution where
+    subst s1 s2 = s1 <> s2
+instance (Substable a, Substable b) => Substable (a -> b) where
+    subst s f = \a -> subst s (f (subst s a))
+
+instance Substable InfState where ...
+instance (Substable a) => Substable (Either e a) where ...
+instance (Substable a, Substable s, Functor m)
+        => Substable (StateT s m a) where
+    subst s = fmap (subst s) . withStateT (subst s)
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Substitutions}
+Now we can write our example like this:
+\begin{lstlisting}
+typeInferExp (Op2E o e1 e2) t = do
+    s1 <- typeInferExp e1 (opInType o)
+    s2 <- (subst s1 (typeInferExp e2)) (opInType o)
+    lift $ (subst s2 mgu) t (opOutType o)
+\end{lstlisting}
+With the following definiton
+\begin{lstlisting}
+typeInferExp' e t s = subst s (typeInferExp e) t
+\end{lstlisting}
+We can even do this:
+\begin{lstlisting}
+typeInferExp (Op2E o e1 e2) t =
+    typeInferExp  e1 (opInType o) >>=
+    typeInferExp' e2 (opInType o) >>=
+    lift . (mgu' t (opOutType o))
+\end{lstlisting}
+\end{frame}
+
+\section{Type inference for statements}
+
+\begin{frame}[fragile]
+\frametitle{Statements}
+Example:
+\begin{lstlisting}
+typeInferStmtList ((AssignS id fs e):ss) t = do
+    schm@(TypeScheme bounds _) <- ctxLookup id
+    vs <- replicateM (length bounds) freshVar
+    s <- typeInferExp e (concrete schm vs)
+    typeInferStmtList' ss t s
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}
+\frametitle{Returns}
+A challenge that is unique to statements, and is not easy to express in terms of type inference on a $\lambda$-calculus like language is return statements.
+\begin{enumerate}
+\item All returns must be of the same type.
+\item Every function must return something.
+\end{enumerate}
+1 is easy. Just let the type of return statements be the type of the expressions the return, and ignore the type of other statements.
+
+2 requires something extra. If we don't make sure of this:
+\begin{itemize}
+\item Functions with no annotations and no returns will have return type $\forall a. a$ due to the way we handle 1. This is a runtime error.
+\item Will this be a problem for functions with return type restricted by type annotations?
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Making sure functions return}
+Solution: Keep a stack of booleans in the state.
+\begin{itemize}
+\item Initially the stack is \lstinline{[False]}.
+\item When a return is encountered set the top element to \lstinline{True}.
+\item When entering a branch of a control structure push False on the stack.
+\item When leaving \emph{the last} branch of a control structure pop the number of branches elements from the stack. Then:
+\begin{itemize}
+  \item let $x$ be the conjunction of the popped elements.
+  \item If one of the branches is guarenteed to be executed set the top element to be the disjunction of itself and $x$.
+\end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Returns}
+The Inference
+\begin{lstlisting}
+implicitReturnNeeded :: Inference Bool
+\end{lstlisting}
+returns(infers?) true only if the stack is exactly \lstinline{[False]}. This means we are at the top level of a function and a return is not guarenteed.
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Returns -- Example 1}
+\begin{lstlisting}
+typeInferStmtList (IfS e body1 (Just body2):ss) t = do
+    s1 <- typeInferExp e TBool
+    enterControl
+    pushCtx
+    s2 <- typeInferStmtList' body1 t s1
+    popCtx
+    enterControl
+    pushCtx
+    s3 <- typeInferStmtList' body2 t s2
+    popCtx
+    leaveControl 2 True
+    typeInferStmtList' ss t s3
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Returns -- Example 2}
+\begin{lstlisting}
+typeInferStmtList [] t = do
+    b <- implicitReturnNeeded
+    if b then
+        lift $ mgu t TVoid
+    else
+        pure mempty
+\end{lstlisting}
+\end{frame}
+\section{What is missing}
+
+\begin{frame}
+\frametitle{Things which are missing}
+
+\begin{itemize}
+\item Type annotations
+\end{itemize}
+\end{frame}
+
+\end{document}
