@@ -37,6 +37,7 @@ instrToString (Stmh i) = "stmh " ++ show i
 instrToString (Sta i) = "sta " ++ show i
 instrToString (Ajs i) = "ajs " ++ show i
 instrToString (Trap i) = "trap " ++ show i
+instrToString (Str s) = s
 
 writeInstr :: [Instr] -> IO ()
 writeInstr is = mapM_ putStrLn (fmap instrToString is)

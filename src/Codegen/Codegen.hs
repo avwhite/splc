@@ -18,7 +18,8 @@ data Instr = Halt
     | Add | Mul | Sub | DivI | ModI | AndI | OrI
     | Eq | Ne | Lt | Gt | Le | Ge
     | Neg | Not
-    | Trap Integer deriving (Show)
+    | Trap Integer
+    | Str String deriving (Show)
 
 data VarCtx = VarCtx [(Identifier, Integer)]
 
@@ -58,73 +59,100 @@ opToInstr GreaterEq = Ge
 op1ToInstr Parser.AST.Neg = Codegen.Codegen.Neg
 op1ToInstr Parser.AST.Not = Codegen.Codegen.Not
 
-codeGenExp :: ASTExp -> Codegen [Instr]
-codeGenExp (IntE i) = pure [Ldc i]
-codeGenExp (CharE c) = pure [Ldc (toInteger (ord c))]
-codeGenExp (BoolE True) = pure [Ldc 1]
-codeGenExp (BoolE False) = pure [Ldc 0]
-codeGenExp (NilE) = pure [Ldc 0]
-codeGenExp (Var id []) = do
+--detagCode False =
+--    [ Lds 0
+--    , Ldc 2
+--    , ModI
+--    , Codegen.Codegen.Not
+--    , Ldc 3
+--    , Add
+--    , DivI]
+detagCode False = [Ldc 2, DivI]
+detagCode True = []
+
+tagCode True = [Ldc 2, Mul]
+tagCode False = []
+
+--You should only pass False to this function when you KNOW you are
+--asking for a stack value.
+--If you need an untagged heap value, just ask for a tagged one, since
+--it is the same anyways.
+--If you need an untagged value and you don't know if it is heap or
+--stack we have a problem, the more complicated and outcommented
+--version of detagCode above should be use. But I don't think this
+--will be neccesary.
+codeGenExp :: Bool -> ASTExp -> Codegen [Instr]
+codeGenExp tagged (IntE i) = pure ([Ldc i] ++ tagCode tagged)
+codeGenExp tagged (CharE c) = pure ([Ldc (toInteger (ord c))] ++ tagCode tagged)
+codeGenExp tagged (BoolE True) = pure ([Ldc 1] ++ tagCode tagged)
+codeGenExp tagged (BoolE False) = pure ([Ldc 0] ++ tagCode tagged)
+codeGenExp tagged (NilE) = pure ([Ldc 0] ++ tagCode tagged)
+codeGenExp tagged (Var id []) = do
     loc <- lookupVar id
-    pure [Ldl loc]
-codeGenExp (Var id flds) = do
+    pure ([Ldl loc] ++ detagCode tagged)
+codeGenExp tagged (Var id flds) = do
     let field = last flds
     let rest = init flds
-    code <- codeGenExp (Var id rest)
+    --Here we ask for a tagged heap value even though we want an
+    --untagged one. Since untagging a heap value is a nop and we no
+    --that we are dealing with a heap value there is no reason.
+    code <- codeGenExp True (Var id rest)
     case field of
-        Fst -> pure (code ++ [Ldh (-1)])
-        Snd -> pure (code ++ [Ldh 0])
-        Hd -> pure (code ++ [Ldh (-1)])
-        Tl  -> pure (code ++ [Ldh 0])
-codeGenExp (PairE e1 e2) = fmap mconcat $ sequence
-    [ codeGenExp e1
-    , codeGenExp e2
-    , pure [Stmh 2]
+        Fst -> pure (code ++ ([Ldh (-1)] ++ detagCode tagged))
+        Snd -> pure (code ++ ([Ldh 0] ++ detagCode tagged))
+        Hd -> pure (code ++ ([Ldh (-1)]  ++ detagCode tagged))
+        Tl  -> pure (code ++ ([Ldh 0] ++ detagCode tagged))
+codeGenExp tagged (PairE e1 e2) = fmap mconcat $ sequence
+    [ codeGenExp True e1 -- We do not know if these are stack or heap
+    , codeGenExp True e2 -- but fine since we want them tagged.
+    , pure [Bsr "alloc", Ajs (-2), LdrRR] --Heap value, same when tagged as when untagged.
     ]
-codeGenExp (Op2E Cons e1 e2) = fmap mconcat $ sequence
-    [ codeGenExp e1
-    , codeGenExp e2
-    , pure [Stmh 2]
+codeGenExp tagged (Op2E Cons e1 e2) = fmap mconcat $ sequence
+    [ codeGenExp True e1
+    , codeGenExp True e2
+    , pure [Bsr "alloc", Ajs (-2), LdrRR] --Same as above
     ]
-codeGenExp (Op2E op e1 e2) = fmap mconcat $ sequence
-    [ codeGenExp e1
-    , codeGenExp e2
-    , pure [opToInstr op]
+codeGenExp tagged (Op2E op e1 e2) = fmap mconcat $ sequence
+    [ codeGenExp False e1
+    , codeGenExp False e2
+    , pure ([opToInstr op] ++ tagCode tagged)
     ]
-codeGenExp (Op1E op e) = fmap mconcat $ sequence
-    [ codeGenExp e
-    , pure [op1ToInstr op]
+codeGenExp tagged (Op1E op e) = fmap mconcat $ sequence
+    [ codeGenExp False e
+    , pure ([op1ToInstr op] ++ tagCode tagged)
     ]
-codeGenExp (FunCallE id args) = do
-    argCode <- fmap mconcat $ sequence (fmap codeGenExp args)
-    pure (argCode ++ [Bsr id, Ajs (toInteger (-(length args))), LdrRR])
-
+codeGenExp tagged (FunCallE id args) = do
+    --Args should be tagged since they will be loaded as variables.
+    argCode <- fmap mconcat $ sequence (fmap (codeGenExp True) args)
+    pure (argCode ++ [Bsr id, Ajs (toInteger (-(length args))), LdrRR] ++ detagCode tagged)
 
 codeGenStmt :: String -> ASTStmt -> Codegen [Instr]
 codeGenStmt _ (AssignS id [] e) = do
-    exprCode <- codeGenExp e
+    exprCode <- codeGenExp True e
     location <- lookupVar id
     pure (exprCode ++ [Stl location])
 codeGenStmt _ (AssignS id flds e) = do
     let field = last flds
     let rest = init flds
-    exprCode <- codeGenExp e
-    varCode   <- codeGenExp (Var id rest)
+    exprCode <- codeGenExp True e
+    --We want an untagged value, but we ask for a tagged one because
+    --we know we are dealing with a heap value and it does not matter.
+    varCode   <- codeGenExp True (Var id rest)
     case field of
         Fst -> pure (exprCode ++ varCode ++ [Sta (-1)])
         Snd  -> pure (exprCode ++ varCode ++ [Sta 0])
         Hd -> pure (exprCode ++ varCode ++ [Sta (-1)])
         Tl -> pure (exprCode ++ varCode ++ [Sta 0])
 codeGenStmt _ (FunCallS id args) = do
-    argCode <- fmap mconcat $ sequence (fmap codeGenExp args)
+    argCode <- fmap mconcat $ sequence (fmap (codeGenExp True) args)
     pure (argCode ++ [Bsr id, Ajs (toInteger (-(length args)))])
 codeGenStmt retLabel (ReturnS (Just e)) = fmap mconcat $ sequence
-    [ codeGenExp e
+    [ codeGenExp True e
     , pure [StrRR, Bra retLabel]
     ]
 codeGenStmt retLabel (ReturnS Nothing) = pure $ [Bra retLabel]
 codeGenStmt retLabel (WhileS e body) = do
-    cond <- codeGenExp e
+    cond <- codeGenExp False e
     bodyCode <- fmap mconcat $ sequence (fmap (codeGenStmt retLabel) body)
     uni <- newUnique
     let beginL = "while" ++ show uni
@@ -135,7 +163,7 @@ codeGenStmt retLabel (WhileS e body) = do
         ++ bodyCode
         ++ [Bra beginL, Label endL])
 codeGenStmt retLabel (IfS e thenBody Nothing) = do
-    cond <- codeGenExp e
+    cond <- codeGenExp False e
     bodyCode <- fmap mconcat $ sequence (fmap (codeGenStmt retLabel) thenBody)
     uni <- newUnique
     let endL = "ifend" ++ show uni
@@ -144,7 +172,7 @@ codeGenStmt retLabel (IfS e thenBody Nothing) = do
         ++ bodyCode
         ++ [Label endL])
 codeGenStmt retLabel (IfS e thenBody (Just elseBody)) = do
-    cond <- codeGenExp e
+    cond <- codeGenExp False e
     bodyCode <- fmap mconcat $ sequence (fmap (codeGenStmt retLabel) thenBody)
     elseCode <- fmap mconcat $ sequence (fmap (codeGenStmt retLabel) elseBody)
     uni <- newUnique
@@ -162,7 +190,7 @@ handleDecls ((VarDecl _ id _):ds) = do
     rest <- handleDecls ds
     insertCtx (id, rest+1)
     pure (rest + 1)
-handleDecls [] = pure 0
+handleDecls [] = pure 1
 
 codeGenFunDecl :: ASTFunDecl -> Codegen [Instr]
 codeGenFunDecl (FunDecl id args _ decls body) = do
@@ -177,7 +205,7 @@ codeGenFunDecl (FunDecl id args _ decls body) = do
     else
         pure ()
     space <- handleDecls decls
-    prologue <- pure [Label id, Link space]
+    prologue <- pure [Label id, Link (space + 1), Ldc space, Stl 1]
     init <- fmap mconcat $ sequence (fmap codeGenVarDecl decls)
     let retLabel = id ++ "XZXreturn"
     main  <- fmap mconcat $ sequence (fmap (codeGenStmt retLabel) body)
@@ -188,15 +216,31 @@ codeGenFunDecl (FunDecl id args _ decls body) = do
 
 codeGenVarDecl :: ASTVarDecl -> Codegen [Instr]
 codeGenVarDecl (VarDecl _ id e) = do
-    expCode <- codeGenExp e
+    expCode <- codeGenExp True e
     loc <- lookupVar id
     pure $ expCode ++ [Stl loc]
     --Evaluate expression and assign var. (requires code)
 
+heapSpace = 16
+
 codeGen :: AST -> Codegen [Instr]
 codeGen ast = do
     c <- codeGen' ast
-    pure $ ((Bsr "main"):Halt:c) ++ isEmptyCode ++ readCode ++ stupidPrint
+    pure $ [ Str "Ldr HP"
+           , Ldc heapSpace
+           , Add
+           , Lds 0
+           , Str "Str R5"
+           , Str "Str R6"
+           , Str "Ldr MP"
+           , Str "Str R7"
+           , Bsr "main"
+           , Halt]
+        ++ c
+        ++ allocCode
+        ++ isEmptyCode
+        ++ readCode
+        ++ stupidPrint
 
 codeGen' :: AST -> Codegen [Instr]
 codeGen' (AST (FunD f:rs)) = do
@@ -207,12 +251,89 @@ codeGen' (AST (VarD _:rs)) = codeGen' (AST rs) --ignore global variables for now
 codeGen' (AST []) = pure []
 
 
+forwardCode =
+    [ Label "forward"
+    , Str "Ldr R5"
+    , Ldc heapSpace
+    , Sub
+    , Ldl (-2)
+    , Le
+    , Ldc heapSpace
+    , Str "Ldr R5"
+    , Lt
+    , AndI
+    , Brf "forwardlabel1"
+    , Str "Ldr R5"
+    , Ldc heapSpace
+    , Sub
+    , Ldl (-2)
+    , Ldh (-2)
+    , Le
+    , Ldc heapSpace
+    , Str "Ldr R5"
+    , Lt
+    , AndI
+    , Brf "forwardlabel2"
+    , Ldl (-2) --Load struct content
+    , Ldh (-1)
+    , Ldl (-2)
+    , Ldh 0
+    , Bsr "alloc" --move it
+    , Ajs (-2)
+    , LdrRR
+    , Ldl (-2)
+    , Sta (-3)
+    , Bra "forwardend"
+    , Label "forwardlabel2" -- in this case we just return the fp
+    , Ldl (-2)
+    , Ldh (-3)
+    , StrRR
+    , Bra "forwardend"
+    , Label "forwardlabel1" -- in this case we return the pointer itself
+    , Ldl (-2)
+    , StrRR
+    , Label "forwardend"
+    , Unlink
+    , Ret]
+
+
+collectCode =
+    [ Label "collect"
+ ]
+
+allocCode =
+    [ Label "alloc"
+    , Link 1
+    , Ldc 0
+    , Stl 1
+    , Str "Ldr R5"
+    , Ldc 4
+    , Sub
+    , Str "Ldr HP"
+    , Lt
+    , Brf "skipgc"
+    , Bsr "collect"
+    , Label "skipgc"
+    , Ldc 0
+    , Str "Ldr HP" -- Forwarding pointer needs to point in current space
+    , Ldl (-3)
+    , Ldl (-2)
+    , Stmh 4
+    , StrRR
+    , Unlink
+    , Ret
+    ]
+
 isEmptyCode =
     [ Label "isEmpty"
-    , Link 0
+    , Link 1
+    , Ldc 0
+    , Stl 1
     , Ldl (0-2)
     , Ldc 0
     , Eq
+    , Ldc 2
+    , Mul --We need to tag bool before returning it.
     , StrRR
     , Unlink
     , Ret
