@@ -1,0 +1,18 @@
+g(x) {
+    var y = 3 : x; //more data to collect, points to already refernced data
+    var a = [];
+
+    x = []; //Lose last direct reference to this memory
+
+    a = 4 : []; //This causes GC for 16 word test heap.
+}
+
+main () {
+    var x = 1 : 2 : []; //Create some data to not collect.
+    var a = 0 : [];
+    a = []; // Create some garbage to collect.
+    g(x.tl);
+
+    x = []; //Forget everything.
+    x = 1 : []; // Cause GC again, to test on other heap.
+}

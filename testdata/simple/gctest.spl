@@ -1,0 +1,11 @@
+f() {
+    var y = (1,2);
+    var x = 1 : 2 : [];
+    return;
+}
+
+main() {
+    var x = f();
+    var y = f();
+    return;
+}
