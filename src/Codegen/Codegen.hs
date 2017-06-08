@@ -150,7 +150,8 @@ codeGenStmt retLabel (ReturnS (Just e)) = fmap mconcat $ sequence
     [ codeGenExp True e
     , pure [StrRR, Bra retLabel]
     ]
-codeGenStmt retLabel (ReturnS Nothing) = pure $ [Bra retLabel]
+codeGenStmt retLabel (ReturnS Nothing) =
+    pure $ [Ldc 0, StrRR, Bra retLabel]
 codeGenStmt retLabel (WhileS e body) = do
     cond <- codeGenExp False e
     bodyCode <- fmap mconcat $ sequence (fmap (codeGenStmt retLabel) body)
@@ -196,23 +197,23 @@ codeGenFunDecl :: ASTFunDecl -> Codegen [Instr]
 codeGenFunDecl (FunDecl id args _ decls body) = do
     --Puts locals in the context and returns amount of space needed.
     (ctx,_) <- get
-    if length args > 0 then
-        mapM_ insertCtx
-                (zip
-                        (reverse args)
-                        [(-(toInteger $ length args))-1 .. -2]
-                )
-    else
-        pure ()
-    space <- handleDecls decls
-    prologue <- pure [Label id, Link (space + 1), Ldc space, Stl 1]
+    lspace <- handleDecls decls
+    let space = lspace + (fromIntegral $ length args)
+    mapM_ insertCtx
+            (zip
+                    args
+                    [lspace + 1 .. space]
+            )
+    prologue <- pure [Label id, Link space, Ldc (space - 1), Stl 1]
+    let loadArgs = mconcat $ fmap (\i -> [Ldl ((-i) - 1), Stl (lspace + i)]) [1 .. fromIntegral $ length args]
+    let zeroLocals = mconcat $ fmap (\i -> [Ldc 0, Stl i]) [2 .. lspace]
     init <- fmap mconcat $ sequence (fmap codeGenVarDecl decls)
     let retLabel = id ++ "XZXreturn"
     main  <- fmap mconcat $ sequence (fmap (codeGenStmt retLabel) body)
     epilouge <- pure [Label retLabel, Unlink, Ret]
     (_,i) <- get
     put (ctx,i)
-    pure $ mconcat [prologue, init, main, epilouge]
+    pure $ mconcat [prologue, loadArgs, zeroLocals, init, main, epilouge]
 
 codeGenVarDecl :: ASTVarDecl -> Codegen [Instr]
 codeGenVarDecl (VarDecl _ id e) = do
@@ -238,6 +239,8 @@ codeGen ast = do
            , Halt]
         ++ c
         ++ allocCode
+        ++ forwardCode
+        ++ collectCode
         ++ isEmptyCode
         ++ readCode
         ++ stupidPrint
@@ -253,14 +256,24 @@ codeGen' (AST []) = pure []
 
 forwardCode =
     [ Label "forward"
+    , Link 1
+    , Ldc 0
+    , Stl 1
     , Str "Ldr R5"
     , Ldc heapSpace
     , Sub
     , Ldl (-2)
     , Le
-    , Ldc heapSpace
+    , Ldl (-2)
     , Str "Ldr R5"
     , Lt
+    , AndI
+    , Codegen.Codegen.Not
+    , Ldl (-2)
+    , Ldc 2
+    , ModI
+    , Ldc 1
+    , Eq
     , AndI
     , Brf "forwardlabel1"
     , Str "Ldr R5"
@@ -269,10 +282,12 @@ forwardCode =
     , Ldl (-2)
     , Ldh (-2)
     , Le
-    , Ldc heapSpace
+    , Ldl (-2)
+    , Ldh (-2)
     , Str "Ldr R5"
     , Lt
     , AndI
+    , Codegen.Codegen.Not
     , Brf "forwardlabel2"
     , Ldl (-2) --Load struct content
     , Ldh (-1)
@@ -282,11 +297,11 @@ forwardCode =
     , Ajs (-2)
     , LdrRR
     , Ldl (-2)
-    , Sta (-3)
+    , Sta (-2)
     , Bra "forwardend"
     , Label "forwardlabel2" -- in this case we just return the fp
     , Ldl (-2)
-    , Ldh (-3)
+    , Ldh (-2)
     , StrRR
     , Bra "forwardend"
     , Label "forwardlabel1" -- in this case we return the pointer itself
@@ -299,13 +314,108 @@ forwardCode =
 
 collectCode =
     [ Label "collect"
+    , Link 6
+    , Ldc 5
+    , Stl 1 --Prolouge end
+    , Str "Ldr R6"
+    , Str "Str HP" --set next = other
+    , Str "Ldr R6"
+    , Stl 2 --set scan = other = next
+    , Str "Ldr R5"
+    , Stl 3 --set temp = limit
+    , Str "Ldr R6"
+    , Ldc heapSpace
+    , Add
+    , Str "Str R5" -- set limit = other + heapSpace
+    , Ldl 3
+    , Ldc heapSpace
+    , Sub
+    , Str "Str R6" --set other = temp - heapSpace
+    --This concludes swapping from and to space
+    --Now we copy roots
+    , Str "Ldr MP"
+    , Ldh 0
+    , Stl 4 --base = [MP] (we skip the current frame, it does not have tags)
+    , Label "startrootloop"
+    , Ldl 4
+    , Str "Ldr R7"
+    , Ne
+    , Brf "endrootloop" -- while base != R7
+    , Ldc 2
+    , Stl 3 --i = 2
+    , Ldl 4
+    , Ldc 1
+    , Add
+    , Ldh 0 -- get [base + 1]
+    , Ldc 2
+    , Add
+    , Stl 5 --locals = [base + 1] + 2
+    , Label "startrootinnerloop"
+    , Ldl 3
+    , Ldl 5
+    , Lt
+    , Brf "endrootinnerloop" -- while i < locals
+    , Ldl 4
+    , Ldl 3
+    , Add
+    , Ldh 0 -- get [base + i]
+    , Bsr "forward"
+    , Ajs (-1)
+    , LdrRR -- forward([base + i])
+    , Ldl 4
+    , Ldl 3
+    , Add
+    , Sta 0 -- set [base + i] = forward([base + i])
+    , Ldl 3
+    , Ldc 1
+    , Add
+    , Stl 3 -- i = i + 1
+    , Bra "startrootinnerloop"
+    , Label "endrootinnerloop"
+    , Ldl 4
+    , Ldh 0
+    , Stl 4 -- base = [base]
+    , Bra "startrootloop"
+    , Label "endrootloop"
+    --Now we have forwarded the roots, time to scan
+    , Label "startscanloop"
+    , Ldl 2
+    , Str "Ldr HP"
+    , Lt
+    , Brf "endscanloop"
+    , Ldl 2
+    , Ldh 2 -- load [scan + 2]
+    , Bsr "forward"
+    , Ajs (-1)
+    , LdrRR
+    , Ldl 2
+    , Sta 2 -- [scan + 2] = forwrad([scan + 2])
+    , Ldl 2
+    , Ldh 3 -- load [scan + 3]
+    , Bsr "forward"
+    , Ajs (-1)
+    , LdrRR
+    , Ldl 2
+    , Sta 3 -- [scan + 3] = forwrad([scan + 3])
+    , Ldl 2
+    , Ldc 4
+    , Add
+    , Stl 2 -- scan = scan + 4
+    , Bra "startscanloop"
+    , Label "endscanloop"
+    , Unlink
+    , Ret
  ]
 
 allocCode =
     [ Label "alloc"
-    , Link 1
-    , Ldc 0
+    , Link 3
+    , Ldc 2
     , Stl 1
+    , Ldl (-2)
+    , Stl 2
+    , Ldl (-3)
+    , Stl 3
     , Str "Ldr R5"
     , Ldc 4
     , Sub
@@ -316,8 +426,8 @@ allocCode =
     , Label "skipgc"
     , Ldc 0
     , Str "Ldr HP" -- Forwarding pointer needs to point in current space
-    , Ldl (-3)
-    , Ldl (-2)
+    , Ldl 3
+    , Ldl 2
     , Stmh 4
     , StrRR
     , Unlink
