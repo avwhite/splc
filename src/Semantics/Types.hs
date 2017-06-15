@@ -343,7 +343,7 @@ typeInferStmtList ((AssignS id fs e):ss) t = do
     a <- freshVar
     s <- typeInferExp (Var id fs) a
     s1 <- typeInferExp' e a s
-    typeInferStmtList' ss t s
+    typeInferStmtList' ss t s1
 typeInferStmtList (FunCallS id es:ss) t = do
     vs <- replicateM (length es) freshVar
     s <- typeInferExp (Var id []) (TArrow vs t)
