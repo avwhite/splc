@@ -1,0 +1,188 @@
+\documentclass{beamer}
+
+\usepackage{listings}
+\usepackage{syntax}
+\usepackage{amsmath}
+
+\lstset{
+  frame=none,
+  xleftmargin=2pt,
+  stepnumber=1,
+  numbers=left,
+  numbersep=5pt,
+  numberstyle=\ttfamily\tiny\color[gray]{0.3},
+  belowcaptionskip=\bigskipamount,
+  captionpos=b,
+  escapeinside={*'}{'*},
+%  language=haskell,
+  tabsize=2,
+  emphstyle={\bf},
+  commentstyle=\it,
+  stringstyle=\mdseries\rmfamily,
+  showspaces=false,
+  keywordstyle=\bfseries\rmfamily,
+  columns=flexible,
+  basicstyle=\small\sffamily,
+  showstringspaces=false,
+  morecomment=[l]\%,
+}
+\title{Code generation}
+\date{May 11, 2017}
+\begin{document}
+\maketitle
+
+\section{Introduction}
+
+\begin{frame}
+\frametitle{Introduction}
+In general we have chosen to keep it simple and do the ``obvious'' thing.
+\begin{itemize}
+\item Every value is always exactly 1 word.
+ \begin{itemize}
+ \item Characters, integers and booleans (and in a sense void) are reprsented as unboxed values.
+ \item Pairs and lists are represented as pointers to heap objects.
+ \end{itemize}
+\item Code for expressions always put results on the stack.
+\item Lists are linked lists as suggested by the syntax.
+\item Stack management is done how the build in convenience instructions do it.
+\end{itemize}
+\end{frame}
+
+\section{Semantics}
+
+\begin{frame}
+\frametitle{Semantics}
+
+\begin{itemize}
+\item Call by value.
+\item But lists and pairs are always pointers, so they are ``references passed by value''.
+        like objects in Java.
+\end{itemize}
+\end{frame}
+
+\section{Calling convention}
+
+\begin{frame}[fragile]
+\frametitle{Stack frame layout}
+\begin{columns}[c]
+\column{.3\textwidth}
+\begin{tabular}{l | c |}
+  & arg 1 \\
+\cline{2-2}
+  & arg 2 \\
+\cline{2-2}
+  & ... \\
+\cline{2-2}
+  & arg $n$ \\
+\cline{2-2}
+  & ret. addr.  \\
+\cline{2-2}
+MP& old MP \\
+\cline{2-2}
+  & local $n$ \\
+\cline{2-2}
+  & ... \\
+\cline{2-2}
+  & local 2\\
+\cline{2-2}
+SP& local 1
+\end{tabular}
+\column{.7\textwidth}
+The caller is responsible for putting from arg to ret. addr. on the stack.
+
+\begin{block}{Prolouge}
+\begin{lstlisting}
+functionname: nop
+link x
+\end{lstlisting}
+where x is the number of local variables.
+\end{block}
+
+\begin{block}{Epilouge}
+\begin{lstlisting}
+functionname_end: nop
+unlink
+ret
+\end{lstlisting}
+restores everything the prolouge did plus ret. addr.
+\end{block}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Calling convention}
+\begin{columns}[c]
+\column{.7\textwidth}
+\begin{block}{Arguments}
+\begin{itemize}
+\item Caller pushes arguments on stack, then ret. addr.
+\item Callee cleans up ret. add.
+\item Caller cleans up arguments.
+\end{itemize}
+\end{block}
+\begin{block}{Return values}
+\begin{itemize}
+\item At return statement, callee puts return value in RR. Then jumps to functionname_end.
+\item After cleaning up arguments, caller pushes RR (unless statement).
+\end{itemize}
+\end{block}
+\column{.3\textwidth}
+Call site looks like:
+\begin{lstlisting}
+;push arg 1
+...
+;push arg n
+bsr functionname
+asj -n
+ldr RR
+\end{lstlisting}
+\end{columns}
+\end{frame}
+
+\section{Lists and Tuples}
+
+\begin{frame}{Lists and Pairs}
+\begin{block}{Pairs}
+The syntactic form \lstinline{(e1, e2)} allocates a new heap objects of
+size 2 and stores the result of \lstinline{e1} and \lstinline{e2} in it.
+\end{block}
+\begin{block}{Lists}
+The syntactic form \lstinline{[]} becomes to constant 0.
+
+The syntactic form \lstinline{e1 : e2} allocates a new heap object of 
+size 2 and stores the result of \lstinline{e1} and \lstinline{e2} in it.
+\end{block}
+\end{frame}
+
+\section{Polymorphism}
+\begin{frame}{Polymorphism}
+Everything is 1 word. No problems(with code generation).
+\end{frame}
+\section{Overloading}
+
+\begin{frame}{Overloading}
+Not yet implemented. Current idea is:
+\begin{itemize}
+\item While doing type inference
+ \begin{itemize}
+ \item add concretized type to every function application in AST.
+ \end{itemize}
+\item While generating code for function applications
+ \begin{itemize}
+ \item Apply resulting substitution (from type inference) to annotated type.
+ \item Use resulting type to choose a print implementation (error if none applicable).
+ \end{itemize}
+\end{itemize}
+\end{frame}
+
+\section{Conclusion}
+
+\begin{frame}{Things missing}
+\begin{itemize}
+\item Overloading
+\item Names (of labels).
+\item Read currently reads input backwards.
+\end{itemize}
+\end{frame}
+
+\end{document}
