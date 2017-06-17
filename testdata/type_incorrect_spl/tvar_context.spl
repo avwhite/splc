@@ -1,0 +1,25 @@
+//Not sure if this should type check or not.
+//a becomes Int, but should the a in the id func
+//signature be universially quantified or not?
+
+
+//For now there is an even simpler problem.
+//The two declarations below type check.
+//They definitly (I think) should not.
+//The problem is that I don't have any clue about
+//how to handle annotations...
+
+a bar = True;
+a foo = 4;
+
+id(x) :: a -> a {
+    return x;
+}
+
+main() {
+    Bool  a = id(bar);
+    Int b = id(foo);
+    foo = foo;
+    bar = foo;
+    return;
+}

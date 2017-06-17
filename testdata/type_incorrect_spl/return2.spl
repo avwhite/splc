@@ -1,0 +1,7 @@
+f(x) {
+    return x;
+}
+
+main() {
+    return True || f(1);
+}

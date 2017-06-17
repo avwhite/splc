@@ -452,14 +452,9 @@ isEmptyCode =
 readCode =
     [ Label "read"
     , Link 0
-    , Trap 12
-    , Ldc 0
-    , Label "readloopXZX"
-    , Stmh 2
-    , Lds (-1)
-    , Ldc 0
-    , Eq
-    , Brf "readloopXZX"
+    , Trap 10
+    , Ldc 2
+    , Mul
     , StrRR
     , Unlink
     , Ret
@@ -468,7 +463,9 @@ readCode =
 stupidPrint =
     [ Label "print"
     , Link 0
-    , Ldl (0-2)
+    , Ldl (-2)
+    , Ldc 2
+    , DivI
     , Trap 0
     , Unlink
     , Ret

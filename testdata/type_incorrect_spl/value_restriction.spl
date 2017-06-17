@@ -1,4 +1,6 @@
 main () {
-    var a = 10;
-    a = True;
+    var a = [];
+    a = True : [];
+    a = 1 : [];
+    return;
 }
